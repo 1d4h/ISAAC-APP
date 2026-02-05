@@ -362,6 +362,26 @@ function renderLogin() {
             </div>
           </div>
           
+          <!-- 아이디 저장 & 자동 로그인 -->
+          <div class="space-y-2">
+            <label class="flex items-center text-sm text-gray-700 cursor-pointer">
+              <input 
+                type="checkbox" 
+                id="saveUsername" 
+                class="mr-2 w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+              />
+              <span>아이디 저장</span>
+            </label>
+            <label class="flex items-center text-sm text-gray-700 cursor-pointer">
+              <input 
+                type="checkbox" 
+                id="autoLogin" 
+                class="mr-2 w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+              />
+              <span>자동 로그인</span>
+            </label>
+          </div>
+          
           <button 
             type="submit" 
             class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-semibold"
@@ -384,13 +404,75 @@ function renderLogin() {
     </div>
   `
   
+  // 저장된 아이디 불러오기
+  const savedUsername = localStorage.getItem('savedUsername')
+  const saveUsernameChecked = localStorage.getItem('saveUsernameChecked') === 'true'
+  const autoLoginChecked = localStorage.getItem('autoLoginChecked') === 'true'
+  
+  if (savedUsername) {
+    document.getElementById('username').value = savedUsername
+  }
+  
+  if (saveUsernameChecked) {
+    document.getElementById('saveUsername').checked = true
+  }
+  
+  if (autoLoginChecked) {
+    document.getElementById('autoLogin').checked = true
+  }
+  
+  // 자동 로그인 체크
+  if (autoLoginChecked && savedUsername) {
+    const savedPassword = localStorage.getItem('savedPassword')
+    if (savedPassword) {
+      console.log('🔄 자동 로그인 시도 중...')
+      setTimeout(async () => {
+        const success = await login(savedUsername, savedPassword)
+        if (success) {
+          showToast('자동 로그인 성공!', 'success')
+          if (state.currentUser.role === 'admin') {
+            renderAdminDashboard()
+          } else {
+            renderUserMap()
+          }
+        } else {
+          // 자동 로그인 실패 시 저장된 비밀번호 삭제
+          localStorage.removeItem('savedPassword')
+          localStorage.removeItem('autoLoginChecked')
+          document.getElementById('autoLogin').checked = false
+          showToast('자동 로그인 실패. 다시 로그인해주세요.', 'warning')
+        }
+      }, 500)
+    }
+  }
+  
   document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault()
     const username = document.getElementById('username').value
     const password = document.getElementById('password').value
+    const saveUsername = document.getElementById('saveUsername').checked
+    const autoLogin = document.getElementById('autoLogin').checked
     
     const success = await login(username, password)
     if (success) {
+      // 아이디 저장 처리
+      if (saveUsername) {
+        localStorage.setItem('savedUsername', username)
+        localStorage.setItem('saveUsernameChecked', 'true')
+      } else {
+        localStorage.removeItem('savedUsername')
+        localStorage.removeItem('saveUsernameChecked')
+      }
+      
+      // 자동 로그인 처리
+      if (autoLogin) {
+        localStorage.setItem('savedPassword', password)
+        localStorage.setItem('autoLoginChecked', 'true')
+      } else {
+        localStorage.removeItem('savedPassword')
+        localStorage.removeItem('autoLoginChecked')
+      }
+      
       showToast('로그인 성공!', 'success')
       if (state.currentUser.role === 'admin') {
         renderAdminDashboard()
@@ -1651,6 +1733,9 @@ function renderCustomerTable() {
 
 function logout() {
   clearSession()
+  // 자동 로그인 해제 (아이디 저장은 유지)
+  localStorage.removeItem('savedPassword')
+  localStorage.removeItem('autoLoginChecked')
   showToast('로그아웃 되었습니다', 'info')
   renderLogin()
 }
@@ -2921,11 +3006,8 @@ function updateASPhotoPreview() {
     return `
     <div class="relative aspect-square bg-gray-100 rounded-lg overflow-hidden border-2 border-gray-200">
       <img src="${imageUrl}" alt="사진 ${index + 1}" class="w-full h-full object-cover">
-      <button onclick="removeASPhoto(${photo.id})" class="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full hover:bg-red-600 transition flex items-center justify-center">
-        <i class="fas fa-times text-xs"></i>
-      </button>
       ${isExisting ? `
-      <div class="absolute top-1 left-1 bg-green-500 text-white rounded-full px-2 py-1 text-xs">
+      <div class="absolute top-1 right-1 bg-green-500 text-white rounded-full px-2 py-1 text-xs">
         <i class="fas fa-check"></i>
       </div>
       ` : ''}
