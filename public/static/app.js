@@ -898,11 +898,11 @@ function renderUserMap() {
               
               <!-- 버튼 -->
               <div class="flex gap-3">
+                <button onclick="resetASResultForm()" class="flex-1 px-6 py-3 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 active:bg-gray-700 transition">
+                  <i class="fas fa-file-alt mr-2"></i>새로 작성
+                </button>
                 <button onclick="completeASResult()" class="flex-1 px-6 py-3 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 active:bg-green-700 transition">
                   <i class="fas fa-check-circle mr-2"></i>완료
-                </button>
-                <button onclick="loadAndEditASResult()" class="flex-1 px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 active:bg-blue-700 transition">
-                  <i class="fas fa-edit mr-2"></i>수정
                 </button>
               </div>
             </div>
@@ -2722,89 +2722,103 @@ async function openASResultModal(customerId) {
     customerNameEl.textContent = customer.customer_name
   }
   
-  // 초기화: 항상 빈 상태로 시작
-  if (photoPreview) {
-    photoPreview.innerHTML = ''
-  }
-  
-  if (textArea) {
-    textArea.value = ''
-  }
-  
   // 모달 표시
   if (modal) {
     modal.classList.remove('hidden')
   }
   
-  console.log('✅ A/S 결과 모달 표시 완료 (빈 상태)')
-}
-
-// 기존 A/S 결과 불러와서 수정 모드로 전환
-async function loadAndEditASResult() {
-  if (!state.currentASCustomerId) {
-    showToast('고객 정보를 찾을 수 없습니다', 'error')
-    return
+  // 기존 A/S 결과가 있으면 자동으로 불러오기
+  try {
+    console.log('📥 기존 A/S 결과 확인 중...')
+    const response = await axios.get(`/api/customers/${customerId}/as-result`)
+    
+    if (response.data.success && response.data.asRecords && response.data.asRecords.length > 0) {
+      // 가장 최근 A/S 기록 가져오기
+      const latestRecord = response.data.asRecords[0]
+      
+      console.log('✅ 기존 A/S 결과 발견 - 자동 로드:', latestRecord)
+      
+      // 현재 A/S 기록 ID 저장
+      state.currentASRecordId = latestRecord.id
+      
+      // 텍스트 내용 설정
+      if (textArea && latestRecord.result_text) {
+        textArea.value = latestRecord.result_text
+      }
+      
+      // 사진 미리보기 설정
+      if (latestRecord.photos && latestRecord.photos.length > 0) {
+        console.log('📸 기존 사진 자동 로드:', latestRecord.photos.length, '개')
+        
+        // state.asPhotos에 기존 사진 정보 저장
+        state.asPhotos = latestRecord.photos.map((photo, index) => ({
+          id: photo.id || Date.now() + index,
+          url: photo.url,
+          storagePath: photo.storage_path || photo.storagePath,
+          filename: photo.filename || `photo_${index + 1}.jpg`,
+          size: photo.file_size || photo.size || 0,
+          type: photo.mime_type || photo.type || 'image/jpeg',
+          isExisting: true  // 기존 사진 표시
+        }))
+        
+        console.log('✅ 기존 사진 정보:', state.asPhotos)
+        
+        // 미리보기 업데이트
+        updateASPhotoPreview()
+      }
+    } else {
+      console.log('ℹ️ 기존 A/S 결과 없음 - 빈 상태')
+      
+      // 초기화
+      if (photoPreview) {
+        photoPreview.innerHTML = ''
+      }
+      
+      if (textArea) {
+        textArea.value = ''
+      }
+    }
+  } catch (error) {
+    console.error('❌ A/S 결과 확인 오류:', error)
+    
+    // 오류가 있어도 모달은 열리도록 함
+    if (photoPreview) {
+      photoPreview.innerHTML = ''
+    }
+    
+    if (textArea) {
+      textArea.value = ''
+    }
   }
   
-  console.log('📥 기존 A/S 결과 불러오기 시작...')
+  console.log('✅ A/S 결과 모달 표시 완료')
+}
+
+// A/S 결과 새로 작성 (초기화)
+function resetASResultForm() {
+  console.log('🔄 A/S 결과 양식 초기화...')
   
   const textArea = document.getElementById('asResultText')
   const photoPreview = document.getElementById('asPhotoPreview')
   
-  try {
-    const response = await axios.get(`/api/customers/${state.currentASCustomerId}/as-result`)
-    
-    if (!response.data.success || !response.data.asRecords || response.data.asRecords.length === 0) {
-      showToast('수정할 A/S 결과가 없습니다', 'warning')
-      console.log('ℹ️ 기존 A/S 결과 없음')
-      return
-    }
-    
-    // 가장 최근 A/S 기록 가져오기
-    const latestRecord = response.data.asRecords[0]
-    
-    console.log('✅ 기존 A/S 결과 불러오기 성공:', latestRecord)
-    
-    // 현재 A/S 기록 ID 저장 (수정용)
-    state.currentASRecordId = latestRecord.id
-    
-    // 텍스트 내용 설정
-    if (textArea && latestRecord.result_text) {
-      textArea.value = latestRecord.result_text
-    }
-    
-    // 사진 미리보기 설정
-    if (latestRecord.photos && latestRecord.photos.length > 0) {
-      console.log('📸 기존 사진 불러오기:', latestRecord.photos.length, '개')
-      
-      // state.asPhotos에 기존 사진 정보 저장
-      state.asPhotos = latestRecord.photos.map((photo, index) => ({
-        id: photo.id || Date.now() + index,
-        url: photo.url,
-        storagePath: photo.storage_path || photo.storagePath,
-        filename: photo.filename || `photo_${index + 1}.jpg`,
-        size: photo.file_size || photo.size || 0,
-        type: photo.mime_type || photo.type || 'image/jpeg',
-        isExisting: true  // 기존 사진 표시
-      }))
-      
-      console.log('✅ 기존 사진 정보:', state.asPhotos)
-      
-      // 미리보기 업데이트
-      updateASPhotoPreview()
-    } else {
-      state.asPhotos = []
-      if (photoPreview) {
-        photoPreview.innerHTML = ''
-      }
-    }
-    
-    showToast('기존 A/S 결과를 불러왔습니다. 수정 후 "완료"를 눌러주세요.', 'info')
-    
-  } catch (error) {
-    console.error('❌ A/S 결과 불러오기 오류:', error)
-    showToast('A/S 결과 불러오기 중 오류가 발생했습니다', 'error')
+  // 사진 초기화
+  state.asPhotos = []
+  
+  // 텍스트 초기화
+  if (textArea) {
+    textArea.value = ''
   }
+  
+  // 미리보기 초기화
+  if (photoPreview) {
+    photoPreview.innerHTML = ''
+  }
+  
+  // 기록 ID 초기화 (신규 작성 모드)
+  state.currentASRecordId = null
+  
+  showToast('새로운 A/S 결과를 작성할 수 있습니다', 'info')
+  console.log('✅ 양식 초기화 완료')
 }
 
 
@@ -2907,15 +2921,14 @@ function updateASPhotoPreview() {
     return `
     <div class="relative aspect-square bg-gray-100 rounded-lg overflow-hidden border-2 border-gray-200">
       <img src="${imageUrl}" alt="사진 ${index + 1}" class="w-full h-full object-cover">
-      ${!isExisting ? `
       <button onclick="removeASPhoto(${photo.id})" class="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full hover:bg-red-600 transition flex items-center justify-center">
         <i class="fas fa-times text-xs"></i>
       </button>
-      ` : `
-      <div class="absolute top-1 right-1 bg-green-500 text-white rounded-full px-2 py-1 text-xs">
+      ${isExisting ? `
+      <div class="absolute top-1 left-1 bg-green-500 text-white rounded-full px-2 py-1 text-xs">
         <i class="fas fa-check"></i>
       </div>
-      `}
+      ` : ''}
       <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs text-center py-1">
         ${index + 1}/10
       </div>
