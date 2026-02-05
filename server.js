@@ -11,10 +11,10 @@ const app = new Hono()
 
 // Supabase 클라이언트 생성
 const supabaseUrl = process.env.SUPABASE_URL
-const supabaseKey = process.env.SUPABASE_ANON_KEY
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseKey) {
-  console.error('❌ SUPABASE_URL 또는 SUPABASE_ANON_KEY가 설정되지 않았습니다.')
+  console.error('❌ SUPABASE_URL 또는 SUPABASE_SERVICE_ROLE_KEY가 설정되지 않았습니다.')
   console.error('📝 .env 파일을 확인해주세요.')
   process.exit(1)
 }
@@ -23,6 +23,7 @@ const supabase = createClient(supabaseUrl, supabaseKey)
 
 console.log('✅ Supabase 클라이언트 초기화 완료')
 console.log('📍 Supabase URL:', supabaseUrl)
+console.log('🔑 사용 중인 키:', supabaseKey.substring(0, 20) + '...')
 
 // CORS 설정
 app.use('/api/*', cors())
