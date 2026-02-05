@@ -115,6 +115,10 @@ pm2 restart webapp
      - 🖼️ **사진 최대 10장** 업로드 가능
      - ✍️ 작업 내용 텍스트 입력
      - 💾 **재확인 시 사진 유지** (초록 체크 아이콘)
+     - ✏️ **수정 기능**: 완료된 A/S 결과 수정 가능
+       - 작업 내용(텍스트) 수정
+       - 기존 사진 삭제 + 새 사진 추가
+       - "수정" 버튼으로 완료 상태 재수정
      - ✅ 완료 시 마커 색상 변경 (연한 회색)
      - 🔄 **업로드 흐름**:
        1. 사진 선택 → 즉시 미리보기 생성 (1/10, 2/10, ...)
@@ -122,6 +126,7 @@ pm2 restart webapp
        3. '완료' 버튼 클릭 → 백그라운드 업로드
        4. Supabase Storage에 저장 (`as-photos` 버킷)
        5. 메타데이터 DB 저장 (`as_photos` 테이블)
+       6. 수정 시: PUT API로 기존 데이터 업데이트
    - ✅ AS 상태별 마커 색상 구분:
      - ⚪ **연한 회색**: A/S 작업 완료
      - 🟢 **초록색**: AS 완료 (수리 완료, 교체 완료 등)
@@ -448,6 +453,7 @@ git reset --hard 8ff7d44             # 특정 커밋으로 복원
 - `POST /api/customers/validate` - Excel 데이터 검증
 - `POST /api/customers/batch-upload` - Excel 데이터 일괄 업로드
 - `POST /api/customers/as-result` - A/S 결과 저장
+- `PUT /api/customers/as-result/:recordId` - A/S 결과 수정 (작업 내용 + 사진)
 - `GET /api/customers/:id/as-result` - A/S 결과 조회
 - `POST /api/customers/as-photo/upload` - A/S 사진 업로드 (Supabase Storage)
 
