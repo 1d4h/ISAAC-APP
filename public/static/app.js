@@ -2943,6 +2943,10 @@ async function completeASResult() {
   console.log('- 사진 개수:', state.asPhotos.length)
   console.log('- 텍스트:', resultText)
   
+  // ⭐ 중요: 모달 닫기 전에 사진 데이터를 로컬 변수에 복사
+  const photosToUpload = [...state.asPhotos]
+  console.log('📸 업로드할 사진 복사:', photosToUpload.length, '개')
+  
   // 즉시 UI 업데이트 (1단계: 빠른 피드백)
   const customerId = state.currentASCustomerId
   
@@ -2950,7 +2954,7 @@ async function completeASResult() {
   const customer = state.customers.find(c => String(c.id) === String(customerId))
   if (customer) {
     customer.as_result_text = resultText
-    customer.as_result_photos = [...state.asPhotos]
+    customer.as_result_photos = [...photosToUpload]  // ⭐ 복사된 데이터 사용
     customer.as_result = 'completed'  // 완료 상태
     customer.as_result_status = 'completed'
     customer.as_completed_at = new Date().toISOString()
@@ -2972,12 +2976,13 @@ async function completeASResult() {
   setTimeout(async () => {
     try {
       console.log('📤 백그라운드에서 사진 업로드 및 메타데이터 저장 중...')
+      console.log('📸 업로드할 사진 개수:', photosToUpload.length)
       
       // 1️⃣ 새로 추가된 사진 업로드 (dataUrl이 있는 사진)
       const uploadedPhotos = []
       
-      for (let i = 0; i < state.asPhotos.length; i++) {
-        const photo = state.asPhotos[i]
+      for (let i = 0; i < photosToUpload.length; i++) {
+        const photo = photosToUpload[i]  // ⭐ photosToUpload 사용
         
         // 이미 업로드된 사진 (url이 있음)
         if (photo.url && !photo.dataUrl) {
@@ -2994,7 +2999,7 @@ async function completeASResult() {
         
         // 새로 추가된 사진 (dataUrl만 있음) - 업로드 필요
         if (photo.dataUrl) {
-          console.log(`📤 사진 ${i + 1}/${state.asPhotos.length} 업로드 중: ${photo.filename}`)
+          console.log(`📤 사진 ${i + 1}/${photosToUpload.length} 업로드 중: ${photo.filename}`)  // ⭐ photosToUpload 사용
           
           try {
             // 서버 API를 통해 업로드
