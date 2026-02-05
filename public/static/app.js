@@ -898,8 +898,11 @@ function renderUserMap() {
               
               <!-- 버튼 -->
               <div class="flex gap-3">
-                <button onclick="completeASResult()" class="w-full px-6 py-3 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 active:bg-green-700 transition">
+                <button id="completeButton" onclick="completeASResult()" class="w-full px-6 py-3 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 active:bg-green-700 transition">
                   <i class="fas fa-check-circle mr-2"></i>완료
+                </button>
+                <button id="updateButton" onclick="updateASResult()" class="hidden w-full px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 active:bg-blue-700 transition">
+                  <i class="fas fa-edit mr-2"></i>수정
                 </button>
               </div>
             </div>
@@ -2711,6 +2714,15 @@ async function openASResultModal(customerId) {
   const customerNameEl = document.getElementById('asModalCustomerName')
   const photoPreview = document.getElementById('asPhotoPreview')
   const textArea = document.getElementById('asResultText')
+  const completeButton = document.getElementById('completeButton')
+  const updateButton = document.getElementById('updateButton')
+  
+  // 기본적으로 완료 버튼 표시
+  if (completeButton) completeButton.classList.remove('hidden')
+  if (updateButton) updateButton.classList.add('hidden')
+  
+  // 현재 A/S 기록 ID 초기화
+  state.currentASRecordId = null
   
   if (customerNameEl) {
     customerNameEl.textContent = customer.customer_name
@@ -2726,6 +2738,15 @@ async function openASResultModal(customerId) {
       const latestRecord = response.data.asRecords[0]
       
       console.log('✅ 기존 A/S 결과 불러오기 성공:', latestRecord)
+      
+      // 현재 A/S 기록 ID 저장 (수정용)
+      state.currentASRecordId = latestRecord.id
+      
+      // 완료 상태이면 수정 버튼 표시
+      if (latestRecord.status === 'completed') {
+        if (completeButton) completeButton.classList.add('hidden')
+        if (updateButton) updateButton.classList.remove('hidden')
+      }
       
       // 텍스트 내용 설정
       if (textArea && latestRecord.result_text) {
@@ -3075,6 +3096,167 @@ async function completeASResult() {
     }
   }, 100)  // 100ms 후 백그라운드 저장 시작
 }
+
+// A/S 결과 수정
+async function updateASResult() {
+  if (!state.currentASCustomerId) {
+    showToast('고객 정보를 찾을 수 없습니다', 'error')
+    return
+  }
+  
+  if (!state.currentASRecordId) {
+    showToast('수정할 A/S 기록을 찾을 수 없습니다', 'error')
+    return
+  }
+  
+  const textArea = document.getElementById('asResultText')
+  const resultText = textArea ? textArea.value.trim() : ''
+  
+  if (!resultText && state.asPhotos.length === 0) {
+    showToast('작업 내용 또는 사진을 입력해주세요', 'error')
+    return
+  }
+  
+  // 확인 대화상자
+  if (!confirm('A/S 작업 내용을 수정하시겠습니까?')) {
+    return
+  }
+  
+  console.log('✏️ A/S 결과 수정 처리...')
+  console.log('- 고객 ID:', state.currentASCustomerId)
+  console.log('- 기록 ID:', state.currentASRecordId)
+  console.log('- 사진 개수:', state.asPhotos.length)
+  console.log('- 텍스트:', resultText)
+  
+  // ⭐ 중요: 모달 닫기 전에 사진 데이터를 로컬 변수에 복사
+  const photosToUpload = [...state.asPhotos]
+  console.log('📸 수정할 사진 복사:', photosToUpload.length, '개')
+  
+  // 즉시 UI 업데이트
+  const customerId = state.currentASCustomerId
+  const recordId = state.currentASRecordId
+  
+  // 고객 정보 업데이트
+  const customer = state.customers.find(c => String(c.id) === String(customerId))
+  if (customer) {
+    customer.as_result_text = resultText
+    customer.as_result_photos = [...photosToUpload]
+  }
+  
+  // 모달 닫기 (즉시)
+  closeASResultModal()
+  
+  // 고객 상세 정보 패널도 닫기
+  closeCustomerDetail()
+  
+  // 성공 메시지 (즉시)
+  showToast('A/S 작업 수정 중...', 'info')
+  
+  // 백그라운드에서 사진 업로드 + 메타데이터 수정 (비동기 처리)
+  setTimeout(async () => {
+    try {
+      console.log('📤 백그라운드에서 사진 업로드 및 메타데이터 수정 중...')
+      console.log('📸 처리할 사진 개수:', photosToUpload.length)
+      
+      // 1️⃣ 새로 추가된 사진 업로드 (dataUrl이 있는 사진)
+      const uploadedPhotos = []
+      
+      for (let i = 0; i < photosToUpload.length; i++) {
+        const photo = photosToUpload[i]
+        
+        // 이미 업로드된 사진 (url이 있음)
+        if (photo.url && !photo.dataUrl) {
+          uploadedPhotos.push({
+            id: photo.id,
+            storagePath: photo.storagePath,
+            url: photo.url,
+            filename: photo.filename,
+            size: photo.size,
+            type: photo.type
+          })
+          console.log(`✅ 기존 사진 ${i + 1}: ${photo.filename}`)
+          continue
+        }
+        
+        // 새로 추가된 사진 (dataUrl만 있음) - 업로드 필요
+        if (photo.dataUrl) {
+          console.log(`📤 새 사진 ${i + 1}/${photosToUpload.length} 업로드 중: ${photo.filename}`)
+          
+          try {
+            // 서버 API를 통해 업로드
+            const response = await fetch('/api/customers/as-photo/upload', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                customerId: customerId,
+                photo: {
+                  dataUrl: photo.dataUrl,
+                  filename: photo.filename,
+                  size: photo.size,
+                  type: photo.type
+                }
+              })
+            })
+            
+            const result = await response.json()
+            
+            if (!response.ok || !result.success) {
+              console.error(`❌ 사진 ${i + 1} 업로드 실패:`, result)
+              showToast(`사진 업로드 실패: ${photo.filename}`, 'error')
+              continue
+            }
+            
+            console.log(`✅ 사진 ${i + 1} 업로드 성공:`, result.storagePath)
+            
+            uploadedPhotos.push({
+              storagePath: result.storagePath,
+              url: result.url,
+              filename: result.filename,
+              size: result.size,
+              type: result.type
+            })
+            
+          } catch (error) {
+            console.error(`❌ 사진 ${i + 1} 업로드 오류:`, error)
+            showToast(`사진 업로드 실패: ${photo.filename}`, 'error')
+          }
+        }
+      }
+      
+      console.log(`📸 처리 완료된 사진: ${uploadedPhotos.length}개`)
+      
+      // 2️⃣ 서버에 메타데이터 수정
+      const response = await fetch(`/api/customers/as-result/${recordId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          customerId: customerId,
+          resultText: resultText,
+          uploadedPhotos: uploadedPhotos,
+          updatedAt: new Date().toISOString()
+        })
+      })
+      
+      if (!response.ok) {
+        throw new Error('A/S 결과 수정 실패')
+      }
+      
+      const data = await response.json()
+      console.log('✅ 메타데이터 수정 성공:', data)
+      
+      showToast('A/S 작업이 수정되었습니다', 'success')
+      
+    } catch (error) {
+      console.error('❌ 백그라운드 수정 실패:', error)
+      showToast('메타데이터 수정 중 오류가 발생했습니다', 'error')
+    }
+  }, 100)  // 100ms 후 백그라운드 수정 시작
+}
+
 
 // 마커 색상 업데이트
 function updateMarkerColor(customerId, status) {

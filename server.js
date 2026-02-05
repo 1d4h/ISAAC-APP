@@ -642,6 +642,81 @@ app.post('/api/customers/as-result', async (c) => {
   }
 })
 
+// A/S 결과 수정 API
+app.put('/api/customers/as-result/:recordId', async (c) => {
+  try {
+    const recordId = c.req.param('recordId')
+    const { customerId, resultText, uploadedPhotos, updatedAt } = await c.req.json()
+    
+    console.log('✏️ A/S 결과 수정 요청:', {
+      recordId,
+      customerId,
+      resultText: resultText?.substring(0, 50) + '...',
+      photoCount: uploadedPhotos?.length || 0,
+      updatedAt
+    })
+    
+    // 1. as_records 테이블 업데이트
+    const { error: updateError } = await supabase
+      .from('as_records')
+      .update({
+        result_text: resultText,
+        updated_at: updatedAt
+      })
+      .eq('id', recordId)
+    
+    if (updateError) {
+      console.error('❌ A/S 기록 수정 오류:', updateError)
+      return c.json({ success: false, message: 'A/S 결과 수정 중 오류가 발생했습니다.' }, 500)
+    }
+    
+    console.log('✅ A/S 기록 수정 성공:', recordId)
+    
+    // 2. 기존 사진 삭제 (새 사진으로 교체)
+    const { error: deleteError } = await supabase
+      .from('as_photos')
+      .delete()
+      .eq('as_record_id', recordId)
+    
+    if (deleteError) {
+      console.error('❌ 기존 사진 삭제 오류:', deleteError)
+    } else {
+      console.log('✅ 기존 사진 삭제 완료')
+    }
+    
+    // 3. 새 사진 메타데이터 저장
+    if (uploadedPhotos && uploadedPhotos.length > 0) {
+      const photoRecords = uploadedPhotos.map(photo => ({
+        as_record_id: recordId,
+        storage_path: photo.storagePath,
+        filename: photo.filename,
+        file_size: photo.size,
+        mime_type: photo.type
+      }))
+      
+      const { error: photoError } = await supabase
+        .from('as_photos')
+        .insert(photoRecords)
+      
+      if (photoError) {
+        console.error('❌ 사진 메타데이터 저장 오류:', photoError)
+      } else {
+        console.log(`✅ 사진 메타데이터 저장 성공: ${photoRecords.length}개`)
+      }
+    }
+    
+    console.log('✅ A/S 결과 수정 완료')
+    
+    return c.json({
+      success: true,
+      recordId: recordId
+    })
+  } catch (error) {
+    console.error('❌ A/S 결과 수정 오류:', error)
+    return c.json({ success: false, message: 'A/S 결과 수정 중 오류가 발생했습니다.' }, 500)
+  }
+})
+
 // A/S 결과 조회
 app.get('/api/customers/:id/as-result', async (c) => {
   try {
