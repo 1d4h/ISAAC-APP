@@ -762,9 +762,6 @@ function renderAdminDashboard() {
               <i class="fas fa-list mr-2"></i>고객 목록
             </h2>
             <div class="flex space-x-3">
-              <button onclick="downloadSampleExcel()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
-                <i class="fas fa-download mr-2"></i>템플릿 다운로드
-              </button>
               <button onclick="downloadASResults()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
                 <i class="fas fa-file-download mr-2"></i>A/S 결과 다운로드
               </button>
@@ -2030,42 +2027,58 @@ function removeAttachedFile() {
 
 // 샘플 Excel 파일 다운로드
 function downloadSampleExcel() {
-  // 샘플 데이터 생성 (실제 업무 양식)
-  const sampleData = [
-    ['순번', '횟수', '접수일자', '업체', '구분', '고객명', '전화번호', '설치연,월', '열원', '주소', 'A/S접수내용', '설치팀', '지역', '접수자', 'AS결과'],
-    [1, 1, '2024-01-15', '서울지사', 'AS', '김철수', '010-1234-5678', '2023-12', '가스', '서울특별시 강남구 테헤란로 123', '온수 온도 조절 불량', '1팀', '강남', '홍길동', '수리 완료'],
-    [2, 1, '2024-01-16', '서울지사', 'AS', '이영희', '010-2345-6789', '2023-11', '전기', '서울특별시 서초구 서초대로 78길 22', '난방 작동 불량', '2팀', '서초', '김영희', '부품 교체 완료'],
-    [3, 2, '2024-01-17', '서울지사', 'AS', '박민수', '010-3456-7890', '2023-10', '가스', '서울특별시 송파구 올림픽로 300', '보일러 소음 발생', '1팀', '송파', '홍길동', '점검 완료']
-  ]
-  
-  // 워크북 생성
-  const wb = XLSX.utils.book_new()
-  const ws = XLSX.utils.aoa_to_sheet(sampleData)
-  
-  // 열 너비 설정
-  ws['!cols'] = [
-    { wch: 8 },   // 순번
-    { wch: 8 },   // 횟수
-    { wch: 12 },  // 접수일자
-    { wch: 12 },  // 업체
-    { wch: 8 },   // 구분
-    { wch: 12 },  // 고객명
-    { wch: 15 },  // 전화번호
-    { wch: 12 },  // 설치연,월
-    { wch: 8 },   // 열원
-    { wch: 40 },  // 주소
-    { wch: 30 },  // A/S접수내용
-    { wch: 10 },  // 설치팀
-    { wch: 10 },  // 지역
-    { wch: 10 },  // 접수자
-    { wch: 20 }   // AS결과
-  ]
-  
-  XLSX.utils.book_append_sheet(wb, ws, 'A/S접수현황')
-  
-  // 파일 다운로드
-  XLSX.writeFile(wb, 'A/S접수현황_템플릿.xlsx')
-  showToast('템플릿 파일이 다운로드되었습니다', 'success')
+  try {
+    // XLSX 라이브러리 확인
+    if (typeof XLSX === 'undefined') {
+      console.error('❌ XLSX 라이브러리가 로드되지 않았습니다')
+      showToast('Excel 라이브러리 로딩 중입니다. 잠시 후 다시 시도해주세요', 'warning')
+      return
+    }
+    
+    console.log('📥 Excel 템플릿 다운로드 시작...')
+    
+    // 샘플 데이터 생성 (실제 업무 양식)
+    const sampleData = [
+      ['순번', '횟수', '접수일자', '업체', '구분', '고객명', '전화번호', '설치연,월', '열원', '주소', 'A/S접수내용', '설치팀', '지역', '접수자', 'AS결과'],
+      [1, 1, '2024-01-15', '서울지사', 'AS', '김철수', '010-1234-5678', '2023-12', '가스', '서울특별시 강남구 테헤란로 123', '온수 온도 조절 불량', '1팀', '강남', '홍길동', '수리 완료'],
+      [2, 1, '2024-01-16', '서울지사', 'AS', '이영희', '010-2345-6789', '2023-11', '전기', '서울특별시 서초구 서초대로 78길 22', '난방 작동 불량', '2팀', '서초', '김영희', '부품 교체 완료'],
+      [3, 2, '2024-01-17', '서울지사', 'AS', '박민수', '010-3456-7890', '2023-10', '가스', '서울특별시 송파구 올림픽로 300', '보일러 소음 발생', '1팀', '송파', '홍길동', '점검 완료']
+    ]
+    
+    // 워크북 생성
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(sampleData)
+    
+    // 열 너비 설정
+    ws['!cols'] = [
+      { wch: 8 },   // 순번
+      { wch: 8 },   // 횟수
+      { wch: 12 },  // 접수일자
+      { wch: 12 },  // 업체
+      { wch: 8 },   // 구분
+      { wch: 12 },  // 고객명
+      { wch: 15 },  // 전화번호
+      { wch: 12 },  // 설치연,월
+      { wch: 8 },   // 열원
+      { wch: 40 },  // 주소
+      { wch: 30 },  // A/S접수내용
+      { wch: 10 },  // 설치팀
+      { wch: 10 },  // 지역
+      { wch: 10 },  // 접수자
+      { wch: 20 }   // AS결과
+    ]
+    
+    XLSX.utils.book_append_sheet(wb, ws, 'A/S접수현황')
+    
+    // 파일 다운로드
+    XLSX.writeFile(wb, 'A/S접수현황_템플릿.xlsx')
+    
+    console.log('✅ Excel 템플릿 다운로드 완료: A/S접수현황_템플릿.xlsx')
+    showToast('템플릿 파일이 다운로드되었습니다', 'success')
+  } catch (error) {
+    console.error('❌ Excel 템플릿 다운로드 실패:', error)
+    showToast('템플릿 다운로드 중 오류가 발생했습니다: ' + error.message, 'error')
+  }
 }
 
 // 파일 정보 표시
