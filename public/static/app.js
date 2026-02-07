@@ -762,6 +762,9 @@ function renderAdminDashboard() {
               <i class="fas fa-list mr-2"></i>고객 목록
             </h2>
             <div class="flex space-x-3">
+              <button onclick="downloadSampleExcel()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
+                <i class="fas fa-download mr-2"></i>템플릿 다운로드
+              </button>
               <button onclick="downloadASResults()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
                 <i class="fas fa-file-download mr-2"></i>A/S 결과 다운로드
               </button>
