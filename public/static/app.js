@@ -207,27 +207,6 @@ function parseExcel(file) {
           return
         }
         
-        // Excel 헤더 → DB 필드 매핑
-        const headerMap = {
-          '순번': 'sequence',
-          '횟수': 'count',
-          '접수일자': 'receipt_date',
-          '업체': 'company',
-          '구분': 'category',
-          '고객명': 'customer_name',
-          '전화번호': 'phone',
-          '설치연월': 'install_date',
-          '설치연,월': 'install_date',  // 쉼표 포함 버전
-          '열원': 'heat_source',
-          '주소': 'address',
-          'A/S접수내용': 'as_content',
-          'AS접수내용': 'as_content',  // A/S 없이도 매칭
-          '설치팀': 'install_team',
-          '지역': 'region',
-          '접수자': 'receptionist',
-          'AS결과': 'as_result',
-          'A/S결과': 'as_result'  // A/S 있는 버전도 매칭
-        }
         
         // 헤더 정규화 함수: 줄바꿈, 공백, 특수문자 제거
         const normalizeHeader = (header) => {
@@ -237,6 +216,41 @@ function parseExcel(file) {
             .replace(/\s+/g, '')        // 공백 제거
             .trim()
         }
+        
+        // Excel 헤더 → DB 필드 매핑 (정규화된 버전으로 생성)
+        const createHeaderMap = () => {
+          const rawMap = {
+            '순번': 'sequence',
+            '횟수': 'count',
+            '접수일자': 'receipt_date',
+            '업체': 'company',
+            '구분': 'category',
+            '고객명': 'customer_name',
+            '전화번호': 'phone',
+            '설치연월': 'install_date',
+            '설치연,월': 'install_date',  // 쉼표 포함 버전
+            '열원': 'heat_source',
+            '주소': 'address',
+            'A/S접수내용': 'as_content',
+            'AS접수내용': 'as_content',  // A/S 없이도 매칭
+            '설치팀': 'install_team',
+            '지역': 'region',
+            '접수자': 'receptionist',
+            'AS결과': 'as_result',
+            'A/S결과': 'as_result'  // A/S 있는 버전도 매칭
+          }
+          
+          // 정규화된 키로 매핑 생성
+          const normalizedMap = {}
+          Object.keys(rawMap).forEach(key => {
+            const normalizedKey = normalizeHeader(key)
+            normalizedMap[normalizedKey] = rawMap[key]
+          })
+          
+          return normalizedMap
+        }
+        
+        const headerMap = createHeaderMap()
         
         // 헤더와 데이터 분리
         const rawHeaders = jsonData[0]
