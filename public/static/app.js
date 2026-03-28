@@ -1519,11 +1519,11 @@ function renderUserMap() {
           <i class="fas fa-crosshairs text-xl" id="gpsIcon"></i>
         </button>
         
-        <!-- 카카오톡 채팅 버튼 (좌측 상단, GPS 버튼 아래) -->
+        <!-- 카카오톡 친구에게 보내기 버튼 (좌측 상단, GPS 버튼 아래) -->
         <button 
-          onclick="openKakaoChannel()" 
+          onclick="openKakaoTalk()" 
           class="absolute top-20 left-4 w-12 h-12 bg-yellow-400 rounded-full shadow-lg flex items-center justify-center hover:bg-yellow-500 transition z-20"
-          title="카카오톡 채팅 상담"
+          title="카카오톡으로 공유하기"
         >
           <svg class="w-6 h-6 text-gray-900" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 3C6.477 3 2 6.477 2 10.75c0 2.866 2.038 5.366 5.038 6.75l-1.288 4.5 4.5-3c.75.15 1.537.25 2.35.25 5.523 0 10-3.477 10-7.75S17.523 3 12 3z"/>
@@ -3085,6 +3085,10 @@ function showCustomerDetail(customerId) {
         <button onclick="${customer.latitude && customer.longitude ? `openTMapNavigation(${customer.latitude}, ${customer.longitude}, '${customer.customer_name.replace(/'/g, "\\'")}')` : `openTMapNavigationByAddress('${customer.address.replace(/'/g, "\\'")}', '${customer.customer_name.replace(/'/g, "\\'")}')`}" class="w-full px-6 py-4 text-lg font-semibold bg-blue-500 text-white rounded-xl hover:bg-blue-600 active:bg-blue-700 transition touch-action-manipulation">
           <i class="fas fa-map-marked-alt mr-2"></i>T Map에서 길 안내
         </button>
+        <button onclick="shareCustomerViaKakao(state.customers.find(c=>c.id==${customer.id}))" class="w-full px-6 py-4 text-lg font-semibold bg-yellow-400 text-gray-900 rounded-xl hover:bg-yellow-500 active:bg-yellow-600 transition touch-action-manipulation flex items-center justify-center gap-2">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3C6.477 3 2 6.477 2 10.75c0 2.866 2.038 5.366 5.038 6.75l-1.288 4.5 4.5-3c.75.15 1.537.25 2.35.25 5.523 0 10-3.477 10-7.75S17.523 3 12 3z"/></svg>
+          카카오톡으로 공유
+        </button>
       </div>
     </div>
   `
@@ -3369,18 +3373,76 @@ function toggleMapType() {
   }
 }
 
-// 카카오톡 채널 채팅 열기
-function openKakaoChannel() {
-  // 오픈 카카오톡 채팅방 링크로 바로 이동
-  const kakaoChannelUrl = 'https://open.kakao.com/o/gwauVvfi'
-  
+// 카카오톡 친구에게 보내기 (Kakao JS SDK sendDefault)
+function openKakaoTalk(customMessage) {
   try {
-    window.open(kakaoChannelUrl, '_blank')
-    console.log('✅ 카카오톡 채팅방 열기:', kakaoChannelUrl)
+    // Kakao SDK 로드 및 초기화 확인
+    if (typeof Kakao === 'undefined' || !Kakao.isInitialized()) {
+      // SDK 미로드 시 카카오톡 앱 딥링크로 폴백
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+      if (isMobile) {
+        window.location.href = 'kakaolink://send'
+      } else {
+        showToast('카카오 SDK를 불러오는 중입니다. 잠시 후 다시 시도해주세요.', 'error')
+      }
+      return
+    }
+
+    // 현재 페이지 정보
+    const pageUrl  = window.location.href
+    const userName = state.currentUser?.name || '사용자'
+    const message  = customMessage || `${userName}님이 현장통합관리 앱에서 메시지를 보냈습니다.`
+
+    // Kakao.Share.sendDefault: 카카오톡 친구 선택 후 메시지 전송
+    Kakao.Share.sendDefault({
+      objectType: 'text',
+      text: message,
+      link: {
+        mobileWebUrl: pageUrl,
+        webUrl: pageUrl
+      },
+      buttons: [
+        {
+          title: '앱 열기',
+          link: {
+            mobileWebUrl: pageUrl,
+            webUrl: pageUrl
+          }
+        }
+      ]
+    })
+
+    console.log('✅ 카카오톡 친구에게 보내기 실행')
   } catch (error) {
-    console.error('❌ 카카오톡 채팅방 열기 실패:', error)
-    showToast('카카오톡 채팅방을 여는 중 오류가 발생했습니다', 'error')
+    console.error('❌ 카카오톡 보내기 실패:', error)
+    // Kakao.Share API 미지원 시 Kakao.Link로 폴백
+    try {
+      Kakao.Link.sendDefault({
+        objectType: 'text',
+        text: customMessage || '현장통합관리 앱에서 메시지를 보냈습니다.',
+        link: {
+          mobileWebUrl: window.location.href,
+          webUrl: window.location.href
+        }
+      })
+    } catch (e) {
+      showToast('카카오톡 실행에 실패했습니다. 카카오톡 앱을 직접 열어주세요.', 'error')
+    }
   }
+}
+
+// 고객 정보 카카오톡으로 공유
+function shareCustomerViaKakao(customer) {
+  if (!customer) return
+  const address = [customer.address, customer.address_detail].filter(Boolean).join(' ')
+  const message = [
+    `📋 고객 정보`,
+    `이름: ${customer.customer_name || '-'}`,
+    `연락처: ${customer.phone || '-'}`,
+    `주소: ${address || '-'}`,
+    customer.as_content ? `A/S 내용: ${customer.as_content}` : ''
+  ].filter(Boolean).join('\n')
+  openKakaoTalk(message)
 }
 
 // ============================================
@@ -4432,7 +4494,8 @@ window.togglePasswordVisibility = togglePasswordVisibility
 window.renderLogin = renderLogin
 window.renderRegister = renderRegister
 window.loginWithKakao = loginWithKakao
-window.openKakaoChannel = openKakaoChannel
+window.openKakaoTalk = openKakaoTalk
+window.shareCustomerViaKakao = shareCustomerViaKakao
 window.closeNotification = closeNotification
 window.requestNotificationPermission = requestNotificationPermission
 
