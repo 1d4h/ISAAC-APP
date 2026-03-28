@@ -113,7 +113,21 @@ app.post('/api/auth/kakao', async (c) => {
       body: new URLSearchParams({
         grant_type: 'authorization_code',
         client_id: process.env.KAKAO_REST_API_KEY,
-        redirect_uri: `${c.req.url.split('/api')[0]}/api/auth/kakao/callback`,
+        redirect_uri: (() => {
+          const fHost = c.req.header('x-forwarded-host')
+          const fProto = c.req.header('x-forwarded-proto') || 'https'
+          const host = c.req.header('host')
+          let base
+          if (fHost) {
+            base = `${fProto}://${fHost}`
+          } else if (host && !host.startsWith('localhost')) {
+            base = `${fProto}://${host}`
+          } else {
+            base = process.env.BASE_URL || c.req.url.split('/api')[0]
+          }
+          console.log('📌 카카오 토큰 교환 redirect_uri:', `${base}/api/auth/kakao/callback`)
+          return `${base}/api/auth/kakao/callback`
+        })(),
         code: code
       })
     })
@@ -254,23 +268,101 @@ app.get('/api/auth/kakao/callback', async (c) => {
 })
 
 // ============================================
+// 카카오 설정 정보 API (프론트엔드에서 동적으로 받아옴)
+// ============================================
+app.get('/api/auth/kakao/config', (c) => {
+  // 브라우저가 실제로 접속한 도메인을 헤더에서 동적으로 감지
+  // 우선순위: X-Forwarded-Host > Host 헤더 > BASE_URL 환경변수
+  const forwardedHost = c.req.header('x-forwarded-host')
+  const forwardedProto = c.req.header('x-forwarded-proto') || 'https'
+  const host = c.req.header('host')
+
+  let baseUrl
+  if (forwardedHost) {
+    // 프록시가 X-Forwarded-Host를 설정한 경우
+    baseUrl = `${forwardedProto}://${forwardedHost}`
+  } else if (host && !host.startsWith('localhost')) {
+    // Host 헤더가 실제 도메인인 경우 (novita.ai, gensparksite.com 등)
+    baseUrl = `${forwardedProto}://${host}`
+  } else if (process.env.BASE_URL) {
+    baseUrl = process.env.BASE_URL
+  } else {
+    baseUrl = `${c.req.url.split('/api')[0]}`
+  }
+
+  const restApiKey = process.env.KAKAO_REST_API_KEY || ''
+  const jsKey = process.env.KAKAO_JAVASCRIPT_KEY || ''
+  const redirectUri = `${baseUrl}/api/auth/kakao/callback`
+
+  console.log('📌 카카오 config 요청 도메인 감지:', { forwardedHost, host, baseUrl })
+  console.log('📌 카카오 설정 redirectUri:', redirectUri)
+
+  return c.json({
+    restApiKey,
+    jsKey,
+    redirectUri
+  })
+})
+
+// ============================================
 // 고객 관리 API
 // ============================================
 
-// 모든 고객 조회
-app.get('/api/customers', async (c) => {
+// ── 계정별 고객 조회 API (upload_source 'assigned:USERNAME' 형식 사용) ──
+app.get('/api/customers/by-user/:username', async (c) => {
   try {
+    const username = c.req.param('username')
+    // upload_source가 'assigned:USERNAME' 으로 시작하는 데이터 조회
     const { data, error } = await supabase
       .from('customers')
       .select('*')
+      .like('upload_source', `assigned:${username}%`)
       .order('created_at', { ascending: false })
+    if (error) return c.json({ success: false, message: error.message }, 500)
+    return c.json({ success: true, customers: data })
+  } catch (e) {
+    return c.json({ success: false, message: e.message }, 500)
+  }
+})
+
+// ── 계정별 고객 수 요약 조회 ──
+app.get('/api/customers/user-summary', async (c) => {
+  try {
+    const usernames = ['test1','test2','test3','test4','test5',
+                       'test6','test7','test8','test9','test10']
+    const counts = {}
+    for (const uname of usernames) {
+      const { count, error } = await supabase
+        .from('customers')
+        .select('*', { count: 'exact', head: true })
+        .like('upload_source', `assigned:${uname}%`)
+      counts[uname] = error ? 0 : (count ?? 0)
+    }
+    return c.json({ success: true, counts })
+  } catch (e) {
+    return c.json({ success: false, message: e.message }, 500)
+  }
+})
+
+// 모든 고객 조회 (관리자: 전체, 일반 사용자: 자신에게 assigned된 데이터만)
+app.get('/api/customers', async (c) => {
+  try {
+    const assignedTo = c.req.query('assigned_to')  // 사용자 필터 (username)
+    
+    let query = supabase.from('customers').select('*').order('created_at', { ascending: false })
+    if (assignedTo) {
+      // upload_source가 'assigned:USERNAME' 으로 시작하는 데이터만 조회
+      query = query.like('upload_source', `assigned:${assignedTo}%`)
+    }
+    
+    const { data, error } = await query
     
     if (error) {
       console.error('❌ 고객 조회 오류:', error)
       return c.json({ success: false, message: '고객 조회 중 오류가 발생했습니다.' }, 500)
     }
     
-    console.log(`✅ 고객 조회 성공: ${data.length}명`)
+    console.log(`✅ 고객 조회 성공: ${data.length}명 (filter: ${assignedTo || 'all'})`)
     return c.json({ success: true, customers: data })
   } catch (error) {
     console.error('❌ 고객 조회 오류:', error)
@@ -447,6 +539,12 @@ app.post('/api/customers/batch-upload', async (c) => {
     const customers = requestBody.data || requestBody.customers
     const userId = requestBody.userId
     const uploadSource = requestBody.uploadSource || 'as_reception'  // 기본값: A/S 접수대장
+    const assignedTo = requestBody.assignedTo || null  // 대상 계정 (test1~test10)
+    
+    // assignedTo가 있으면 upload_source를 'assigned:USERNAME:TYPE' 형식으로 저장
+    const finalUploadSource = assignedTo
+      ? `assigned:${assignedTo}:${uploadSource}`
+      : uploadSource
     
     if (!customers || !Array.isArray(customers)) {
       console.error('❌ 잘못된 데이터 형식:', typeof customers)
@@ -475,7 +573,7 @@ app.post('/api/customers/batch-upload', async (c) => {
     const cleanCustomers = customers.map((customer, index) => {
       const cleaned = {
         created_by: userId || null,
-        upload_source: uploadSource  // 업로드 소스 저장
+        upload_source: finalUploadSource  // assigned:USERNAME:TYPE 또는 as_reception/field_management
       }
       
       // 허용된 컬럼만 복사

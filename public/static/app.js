@@ -86,15 +86,23 @@ async function login(username, password) {
 // 카카오 로그인 함수
 async function loginWithKakao() {
   try {
-    // Kakao SDK 초기화 확인
-    if (!window.Kakao || !window.Kakao.isInitialized()) {
-      showToast('카카오 SDK가 초기화되지 않았습니다', 'error')
+    // 서버에서 카카오 설정 정보 동적으로 가져오기
+    let restApiKey, redirectUri
+    try {
+      const configRes = await axios.get('/api/auth/kakao/config')
+      restApiKey = configRes.data.restApiKey
+      redirectUri = configRes.data.redirectUri
+      console.log('✅ 카카오 설정 로드 성공 - redirectUri:', redirectUri)
+    } catch (configErr) {
+      console.warn('⚠️ 카카오 설정 API 실패, 기본값 사용:', configErr)
+      restApiKey = 'c933c69ba4e0228895438c6a8c327e74'
+      redirectUri = `${window.location.origin}/api/auth/kakao/callback`
+    }
+
+    if (!restApiKey) {
+      showToast('카카오 REST API Key가 설정되지 않았습니다. 관리자에게 문의하세요.', 'error')
       return
     }
-    
-    // REST API Key 확인
-    const restApiKey = 'c933c69ba4e0228895438c6a8c327e74' // JavaScript Key를 임시로 사용
-    const redirectUri = `${window.location.origin}/api/auth/kakao/callback`
     
     // 카카오 인증 URL
     const kakaoAuthUrl = `https://kauth.kakao.com/oauth/authorize?client_id=${restApiKey}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code`
@@ -202,7 +210,12 @@ function handleKakaoCodeFromURL() {
 async function loadCustomers() {
   try {
     console.log('📥 고객 데이터 로드 시작...')
-    const response = await axios.get('/api/customers')
+    // 일반 사용자(test1~test10)는 자신에게 assigned된 데이터만 조회
+    const isTestUser = state.currentUser && /^test\d+$/.test(state.currentUser.username)
+    const url = isTestUser
+      ? `/api/customers?assigned_to=${state.currentUser.username}`
+      : '/api/customers'
+    const response = await axios.get(url)
     console.log('📥 API 응답 받음:', response.data.success, '고객 수:', response.data.customers?.length)
     if (response.data.success) {
       state.customers = response.data.customers
@@ -996,6 +1009,67 @@ function renderRegister() {
 
 // 관리자 대시보드
 function renderAdminDashboard() {
+  // 계정별 색상 팔레트
+  const userColors = [
+    { bg: 'bg-blue-500',   light: 'bg-blue-50',   border: 'border-blue-200',   text: 'text-blue-700',   badge: 'bg-blue-100 text-blue-800'   },
+    { bg: 'bg-emerald-500',light: 'bg-emerald-50', border: 'border-emerald-200',text: 'text-emerald-700',badge: 'bg-emerald-100 text-emerald-800'},
+    { bg: 'bg-violet-500', light: 'bg-violet-50',  border: 'border-violet-200', text: 'text-violet-700', badge: 'bg-violet-100 text-violet-800' },
+    { bg: 'bg-orange-500', light: 'bg-orange-50',  border: 'border-orange-200', text: 'text-orange-700', badge: 'bg-orange-100 text-orange-800' },
+    { bg: 'bg-pink-500',   light: 'bg-pink-50',    border: 'border-pink-200',   text: 'text-pink-700',   badge: 'bg-pink-100 text-pink-800'   },
+    { bg: 'bg-teal-500',   light: 'bg-teal-50',    border: 'border-teal-200',   text: 'text-teal-700',   badge: 'bg-teal-100 text-teal-800'   },
+    { bg: 'bg-red-500',    light: 'bg-red-50',     border: 'border-red-200',    text: 'text-red-700',    badge: 'bg-red-100 text-red-800'    },
+    { bg: 'bg-amber-500',  light: 'bg-amber-50',   border: 'border-amber-200',  text: 'text-amber-700',  badge: 'bg-amber-100 text-amber-800'  },
+    { bg: 'bg-cyan-500',   light: 'bg-cyan-50',    border: 'border-cyan-200',   text: 'text-cyan-700',   badge: 'bg-cyan-100 text-cyan-800'   },
+    { bg: 'bg-indigo-500', light: 'bg-indigo-50',  border: 'border-indigo-200', text: 'text-indigo-700', badge: 'bg-indigo-100 text-indigo-800'},
+  ]
+
+  const userPanels = Array.from({length: 10}, (_, i) => {
+    const num = i + 1
+    const uname = `test${num}`
+    const c = userColors[i]
+    return `
+      <div class="bg-white rounded-xl shadow-sm border ${c.border} overflow-hidden">
+        <!-- 패널 헤더 -->
+        <div class="flex items-center justify-between px-5 py-4 ${c.light} border-b ${c.border}">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-full ${c.bg} flex items-center justify-center text-white font-bold text-sm">${num}</div>
+            <div>
+              <p class="font-bold text-gray-800 text-sm">${uname} 계정</p>
+              <p class="text-xs text-gray-500" id="count-${uname}">데이터 로딩 중...</p>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="openUserUploadModal('${uname}')"
+              class="px-3 py-1.5 ${c.bg} text-white text-xs rounded-lg hover:opacity-90 transition flex items-center gap-1">
+              <i class="fas fa-upload"></i> 업로드
+            </button>
+            <button onclick="openUserDataModal('${uname}')"
+              class="px-3 py-1.5 bg-gray-600 text-white text-xs rounded-lg hover:bg-gray-700 transition flex items-center gap-1">
+              <i class="fas fa-list"></i> 목록
+            </button>
+            <button onclick="deleteUserData('${uname}')"
+              class="px-3 py-1.5 bg-red-500 text-white text-xs rounded-lg hover:bg-red-600 transition flex items-center gap-1">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        </div>
+        <!-- 파일 드롭존 -->
+        <div id="dropzone-${uname}"
+          class="m-4 border-2 border-dashed border-gray-200 rounded-lg p-5 text-center transition cursor-pointer hover:border-${c.bg.replace('bg-','')} hover:${c.light}"
+          ondragover="event.preventDefault(); this.classList.add('${c.border}','${c.light}')"
+          ondragleave="this.classList.remove('${c.border}','${c.light}')"
+          ondrop="handleUserFileDrop(event, '${uname}')"
+          onclick="document.getElementById('file-${uname}').click()">
+          <input type="file" id="file-${uname}" accept=".xlsx,.xls" class="hidden" onchange="handleUserFileSelect(event,'${uname}')">
+          <i class="fas fa-file-excel text-2xl text-gray-300 mb-2"></i>
+          <p class="text-xs text-gray-400">Excel 파일을 드래그하거나 클릭하여 업로드</p>
+        </div>
+        <!-- 업로드된 파일 태그 영역 -->
+        <div id="uploaded-${uname}" class="px-4 pb-4 flex flex-wrap gap-2 min-h-[28px]"></div>
+      </div>
+    `
+  }).join('')
+
   const app = document.getElementById('app')
   app.innerHTML = `
     <div class="min-h-screen bg-gray-50">
@@ -1022,220 +1096,376 @@ function renderAdminDashboard() {
       
       <!-- 메인 컨텐츠 -->
       <main class="max-w-7xl mx-auto px-4 py-8">
-        <!-- 통계 카드 -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div class="bg-white p-6 rounded-xl shadow-sm border">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-gray-600 text-sm">전체 고객</p>
-                <p class="text-3xl font-bold text-gray-800 mt-2" id="totalCustomers">0</p>
-              </div>
-              <div class="bg-blue-100 p-4 rounded-full">
-                <i class="fas fa-users text-2xl text-blue-600"></i>
-              </div>
+
+        <!-- 전체 통계 요약 -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+          <div class="bg-white p-5 rounded-xl shadow-sm border flex items-center justify-between">
+            <div>
+              <p class="text-gray-500 text-sm">전체 등록 고객</p>
+              <p class="text-3xl font-bold text-gray-800 mt-1" id="totalCustomers">-</p>
             </div>
+            <div class="bg-blue-100 p-4 rounded-full"><i class="fas fa-users text-2xl text-blue-600"></i></div>
           </div>
-          
-          <div class="bg-white p-6 rounded-xl shadow-sm border">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-gray-600 text-sm">위치 등록</p>
-                <p class="text-3xl font-bold text-gray-800 mt-2" id="geoCodedCustomers">0</p>
-              </div>
-              <div class="bg-green-100 p-4 rounded-full">
-                <i class="fas fa-map-marker-alt text-2xl text-green-600"></i>
-              </div>
+          <div class="bg-white p-5 rounded-xl shadow-sm border flex items-center justify-between">
+            <div>
+              <p class="text-gray-500 text-sm">위치 등록 완료</p>
+              <p class="text-3xl font-bold text-gray-800 mt-1" id="geoCodedCustomers">-</p>
             </div>
+            <div class="bg-green-100 p-4 rounded-full"><i class="fas fa-map-marker-alt text-2xl text-green-600"></i></div>
           </div>
-          
-          <div class="bg-white p-6 rounded-xl shadow-sm border">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-gray-600 text-sm">오늘 등록</p>
-                <p class="text-3xl font-bold text-gray-800 mt-2" id="todayCustomers">0</p>
-              </div>
-              <div class="bg-purple-100 p-4 rounded-full">
-                <i class="fas fa-calendar-day text-2xl text-purple-600"></i>
-              </div>
+          <div class="bg-white p-5 rounded-xl shadow-sm border flex items-center justify-between">
+            <div>
+              <p class="text-gray-500 text-sm">활성 계정 수</p>
+              <p class="text-3xl font-bold text-gray-800 mt-1">10</p>
             </div>
+            <div class="bg-purple-100 p-4 rounded-full"><i class="fas fa-id-badge text-2xl text-purple-600"></i></div>
           </div>
         </div>
-        
-        <!-- 고객 관리 섹션 -->
-        <div class="bg-white rounded-xl shadow-sm border p-6">
-          <div class="flex justify-between items-center mb-6">
-            <h2 class="text-xl font-bold text-gray-800">
-              <i class="fas fa-list mr-2"></i>고객 목록
-            </h2>
-            <div class="flex space-x-3">
-              <button onclick="downloadASResults()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
-                <i class="fas fa-file-download mr-2"></i>A/S 결과 다운로드
-              </button>
-              <button onclick="openUploadModal()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-                <i class="fas fa-file-excel mr-2"></i>Excel 업로드
-              </button>
-              <button onclick="manualUpdateMissingCoordinates()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
-                <i class="fas fa-map-marker-alt mr-2"></i>좌표 업데이트
-              </button>
-              <button onclick="deleteSelectedCustomers()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
-                <i class="fas fa-trash mr-2"></i>선택 삭제
-              </button>
-            </div>
-          </div>
-          
-          <div class="overflow-x-auto">
-            <table class="w-full">
-              <thead class="bg-gray-50 border-b-2 border-gray-200">
-                <tr>
-                  <th class="px-4 py-3 text-left">
-                    <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" class="rounded">
-                  </th>
-                  <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">고객명</th>
-                  <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">연락처</th>
-                  <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">주소</th>
-                  <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">좌표 상태</th>
-                  <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">등록일</th>
-                </tr>
-              </thead>
-              <tbody id="customerTableBody" class="divide-y divide-gray-200">
-                <tr>
-                  <td colspan="6" class="px-4 py-8 text-center text-gray-500">
-                    <i class="fas fa-inbox text-4xl mb-2"></i>
-                    <p>고객 데이터를 불러오는 중...</p>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+
+        <!-- 계정별 업로드 섹션 제목 -->
+        <div class="flex items-center justify-between mb-5">
+          <h2 class="text-lg font-bold text-gray-800">
+            <i class="fas fa-layer-group mr-2 text-blue-600"></i>계정별 데이터 업로드 관리
+          </h2>
+          <button onclick="refreshAllCounts()" class="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition text-sm">
+            <i class="fas fa-sync-alt mr-1"></i>전체 갱신
+          </button>
         </div>
+
+        <!-- 계정별 업로드 패널 2열 그리드 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
+          ${userPanels}
+        </div>
+
       </main>
-      
-      <!-- 푸터 (사업자 정보) -->
-      <footer class="bg-gray-100 border-t mt-8">
-        <div class="max-w-7xl mx-auto px-4 py-6">
-          <div class="text-center text-gray-600 text-xs space-y-2">
-            <p class="font-semibold text-sm text-gray-800">드림박스</p>
-            <p>대표자: 이진웅 | 사업자등록번호: 509-04-32195 | 통신판매업 신고번호: 2022-광주서구-0467</p>
-            <p>주소: 광주광역시 서구 화운로 193번길 25, 103동 1105호 (내방동, 내방마을주공아파트)</p>
+
+      <!-- 푸터 -->
+      <footer class="bg-gray-100 border-t mt-4">
+        <div class="max-w-7xl mx-auto px-4 py-5">
+          <div class="text-center text-gray-500 text-xs space-y-1">
+            <p class="font-semibold text-sm text-gray-700">드림박스</p>
+            <p>대표자: 이진웅 | 사업자등록번호: 509-04-32195</p>
             <p>대표 전화: 010-7604-8244 | 이메일: jinung.biz@gmail.com</p>
           </div>
         </div>
       </footer>
     </div>
-    
-    <!-- Excel 업로드 모달 -->
-    <div id="uploadModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-        <div class="p-6 border-b flex justify-between items-center">
-          <h3 class="text-xl font-bold text-gray-800">
-            <i class="fas fa-file-excel mr-2 text-green-600"></i>Excel 파일 업로드
+
+    <!-- ── 계정별 업로드 모달 ── -->
+    <div id="userUploadModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg">
+        <div class="p-5 border-b flex justify-between items-center">
+          <h3 class="text-lg font-bold text-gray-800" id="userUploadModalTitle">
+            <i class="fas fa-upload mr-2 text-blue-600"></i>Excel 업로드
           </h3>
-          <button onclick="closeUploadModal()" class="text-gray-500 hover:text-gray-700">
-            <i class="fas fa-times text-xl"></i>
-          </button>
+          <button onclick="closeUserUploadModal()" class="text-gray-400 hover:text-gray-700 text-xl">&times;</button>
         </div>
-        
-        <!-- 탭 메뉴 -->
-        <div class="border-b border-gray-200">
-          <div class="flex">
-            <button id="tab-as" onclick="switchUploadTab('as')" class="flex-1 px-6 py-3 text-sm font-medium text-blue-600 border-b-2 border-blue-600 bg-blue-50">
-              <i class="fas fa-clipboard-list mr-2"></i>A/S 접수대장
-            </button>
-            <button id="tab-site" onclick="switchUploadTab('site')" class="flex-1 px-6 py-3 text-sm font-medium text-gray-600 border-b-2 border-transparent hover:text-gray-900 hover:bg-gray-50">
-              <i class="fas fa-building mr-2"></i>현장 통합 관리
+        <div class="p-5 space-y-4">
+          <!-- 업로드 타입 선택 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">업로드 유형</label>
+            <div class="flex gap-3">
+              <label class="flex-1 flex items-center gap-2 border rounded-lg p-3 cursor-pointer hover:bg-blue-50 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
+                <input type="radio" name="uploadType" value="as_reception" checked class="text-blue-600">
+                <div>
+                  <p class="text-sm font-medium">A/S 접수대장</p>
+                  <p class="text-xs text-gray-500">고객명, 연락처, 주소</p>
+                </div>
+              </label>
+              <label class="flex-1 flex items-center gap-2 border rounded-lg p-3 cursor-pointer hover:bg-green-50 has-[:checked]:border-green-500 has-[:checked]:bg-green-50">
+                <input type="radio" name="uploadType" value="field_management" class="text-green-600">
+                <div>
+                  <p class="text-sm font-medium">현장 통합 관리</p>
+                  <p class="text-xs text-gray-500">실사용자, 설치장소</p>
+                </div>
+              </label>
+            </div>
+          </div>
+          <!-- 파일 선택 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Excel 파일 선택</label>
+            <div id="modalDropzone"
+              class="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center cursor-pointer hover:border-blue-300 hover:bg-blue-50 transition"
+              onclick="document.getElementById('modalFileInput').click()"
+              ondragover="event.preventDefault();this.classList.add('border-blue-400','bg-blue-50')"
+              ondragleave="this.classList.remove('border-blue-400','bg-blue-50')"
+              ondrop="handleModalDrop(event)">
+              <input type="file" id="modalFileInput" accept=".xlsx,.xls" class="hidden" onchange="handleModalFileSelect(event)">
+              <i class="fas fa-file-excel text-3xl text-gray-300 mb-2"></i>
+              <p class="text-sm text-gray-500">파일을 드래그하거나 클릭하여 선택</p>
+              <p id="modalFileName" class="text-sm font-medium text-blue-600 mt-2"></p>
+            </div>
+          </div>
+          <!-- 버튼 -->
+          <div class="flex gap-3 pt-2">
+            <button onclick="closeUserUploadModal()" class="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">취소</button>
+            <button onclick="submitUserUpload()" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium">
+              <i class="fas fa-upload mr-2"></i>업로드 시작
             </button>
           </div>
         </div>
-        
-        <div class="p-6 overflow-y-auto" style="max-height: calc(90vh - 200px)">
-          <!-- A/S 접수대장 탭 -->
-          <div id="uploadTab-as" class="space-y-4">
-            <div class="bg-white border border-gray-300 rounded-lg">
-              <div class="p-4 border-b border-gray-200">
-                <div class="flex items-center gap-3">
-                  <label class="text-sm font-medium text-gray-700 w-20">파일 첨부:</label>
-                  <div class="flex-1">
-                    <input type="file" id="excelFile-as" accept=".xlsx,.xls" class="hidden" onchange="handleFileSelect(event, 'as')">
-                    <button onclick="document.getElementById('excelFile-as').click()" class="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition text-sm">
-                      <i class="fas fa-paperclip mr-2"></i>파일 선택
-                    </button>
-                  </div>
-                </div>
-              </div>
-              
-              <div id="attachedFilesList-as" class="p-4 bg-gray-50 min-h-[100px]">
-                <p class="text-sm text-gray-500 text-center py-8">
-                  <i class="fas fa-inbox text-3xl text-gray-300 mb-2"></i><br>
-                  첨부된 파일이 없습니다
-                </p>
-              </div>
-            </div>
-            
-            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div class="flex items-center justify-between">
-                <div>
-                  <p class="font-semibold text-blue-900 mb-1">
-                    <i class="fas fa-info-circle mr-2"></i>A/S 접수대장 템플릿
-                  </p>
-                  <p class="text-xs text-blue-700">
-                    필수 필드: 고객명, 전화번호, 주소
-                  </p>
-                </div>
-                <button onclick="downloadSampleExcel('as')" class="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition">
-                  <i class="fas fa-download mr-2"></i>다운로드
-                </button>
-              </div>
-            </div>
-          </div>
-          
-          <!-- 현장 통합 관리 탭 -->
-          <div id="uploadTab-site" class="hidden space-y-4">
-            <div class="bg-white border border-gray-300 rounded-lg">
-              <div class="p-4 border-b border-gray-200">
-                <div class="flex items-center gap-3">
-                  <label class="text-sm font-medium text-gray-700 w-20">파일 첨부:</label>
-                  <div class="flex-1">
-                    <input type="file" id="excelFile-site" accept=".xlsx,.xls" class="hidden" onchange="handleFileSelect(event, 'site')">
-                    <button onclick="document.getElementById('excelFile-site').click()" class="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition text-sm">
-                      <i class="fas fa-paperclip mr-2"></i>파일 선택
-                    </button>
-                  </div>
-                </div>
-              </div>
-              
-              <div id="attachedFilesList-site" class="p-4 bg-gray-50 min-h-[100px]">
-                <p class="text-sm text-gray-500 text-center py-8">
-                  <i class="fas fa-inbox text-3xl text-gray-300 mb-2"></i><br>
-                  첨부된 파일이 없습니다
-                </p>
-              </div>
-            </div>
-            
-            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
-              <div class="flex items-center justify-between">
-                <div>
-                  <p class="font-semibold text-green-900 mb-1">
-                    <i class="fas fa-info-circle mr-2"></i>현장 통합 관리 템플릿
-                  </p>
-                  <p class="text-xs text-green-700">
-                    필수 필드: 실사용자, 설치장소, 소유주연락처
-                  </p>
-                </div>
-                <button onclick="downloadSampleExcel('site')" class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition">
-                  <i class="fas fa-download mr-2"></i>다운로드
-                </button>
-              </div>
-            </div>
+      </div>
+    </div>
+
+    <!-- ── 계정별 데이터 목록 모달 ── -->
+    <div id="userDataModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+        <div class="p-5 border-b flex justify-between items-center flex-shrink-0">
+          <h3 class="text-lg font-bold text-gray-800" id="userDataModalTitle">데이터 목록</h3>
+          <button onclick="closeUserDataModal()" class="text-gray-400 hover:text-gray-700 text-xl">&times;</button>
+        </div>
+        <div class="overflow-auto flex-1 p-4">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 sticky top-0">
+              <tr>
+                <th class="px-3 py-2 text-left text-gray-600 font-semibold">고객명</th>
+                <th class="px-3 py-2 text-left text-gray-600 font-semibold">연락처</th>
+                <th class="px-3 py-2 text-left text-gray-600 font-semibold">주소</th>
+                <th class="px-3 py-2 text-left text-gray-600 font-semibold">좌표</th>
+                <th class="px-3 py-2 text-left text-gray-600 font-semibold">등록일</th>
+              </tr>
+            </thead>
+            <tbody id="userDataTableBody" class="divide-y divide-gray-100">
+              <tr><td colspan="5" class="text-center py-8 text-gray-400">로딩 중...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="p-4 border-t flex-shrink-0 flex justify-between items-center">
+          <span id="userDataCount" class="text-sm text-gray-500"></span>
+          <div class="flex gap-2">
+            <button onclick="manualUpdateMissingCoordinates()" class="px-3 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition">
+              <i class="fas fa-map-marker-alt mr-1"></i>좌표 업데이트
+            </button>
+            <button onclick="closeUserDataModal()" class="px-3 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition">닫기</button>
           </div>
         </div>
       </div>
     </div>
   `
-  
-  loadCustomers().then(() => {
-    updateDashboardStats()
-    renderCustomerTable()
+
+  // 전체 통계 로드 (관리자는 전체 고객 조회)
+  axios.get('/api/customers').then(res => {
+    if (res.data.success) {
+      const all = res.data.customers
+      const totalEl = document.getElementById('totalCustomers')
+      const geoEl = document.getElementById('geoCodedCustomers')
+      if (totalEl) totalEl.textContent = all.length
+      if (geoEl) geoEl.textContent = all.filter(c => c.latitude && c.longitude).length
+    }
   })
+  // 각 계정별 데이터 수 로드
+  refreshAllCounts()
+}
+
+// ── 계정별 데이터 수 갱신 ──
+async function refreshAllCounts() {
+  try {
+    const res = await axios.get('/api/customers/user-summary')
+    if (res.data.success) {
+      const counts = res.data.counts
+      for (let i = 1; i <= 10; i++) {
+        const uname = `test${i}`
+        const el = document.getElementById(`count-${uname}`)
+        const uploaded = document.getElementById(`uploaded-${uname}`)
+        const cnt = counts[uname] ?? 0
+        if (el) el.textContent = `등록 데이터: ${cnt}건`
+        if (uploaded) {
+          uploaded.innerHTML = cnt > 0
+            ? `<span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full"><i class="fas fa-check-circle mr-1"></i>${cnt}건 등록됨</span>`
+            : ''
+        }
+      }
+    }
+  } catch(e) {
+    // 개별 요청 폴백
+    for (let i = 1; i <= 10; i++) {
+      const uname = `test${i}`
+      const el = document.getElementById(`count-${uname}`)
+      if (!el) continue
+      try {
+        const res = await axios.get(`/api/customers/by-user/${uname}`)
+        const cnt = res.data.customers?.length ?? 0
+        el.textContent = `등록 데이터: ${cnt}건`
+        const uploaded = document.getElementById(`uploaded-${uname}`)
+        if (uploaded && cnt > 0) {
+          uploaded.innerHTML = `<span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full"><i class="fas fa-check-circle mr-1"></i>${cnt}건 등록됨</span>`
+        }
+      } catch(e2) {
+        if (el) el.textContent = '데이터 조회 실패'
+      }
+    }
+  }
+}
+
+// ── 계정별 업로드 모달 ──
+let currentUploadUser = null
+let currentModalFile = null
+
+function openUserUploadModal(username) {
+  currentUploadUser = username
+  currentModalFile = null
+  document.getElementById('userUploadModalTitle').innerHTML =
+    `<i class="fas fa-upload mr-2 text-blue-600"></i><span class="text-blue-600">${username}</span> 계정 데이터 업로드`
+  document.getElementById('modalFileName').textContent = ''
+  document.getElementById('modalFileInput').value = ''
+  document.getElementById('userUploadModal').classList.remove('hidden')
+}
+function closeUserUploadModal() {
+  document.getElementById('userUploadModal').classList.add('hidden')
+  currentUploadUser = null
+  currentModalFile = null
+}
+function handleModalFileSelect(event) {
+  const file = event.target.files[0]
+  if (!file) return
+  currentModalFile = file
+  document.getElementById('modalFileName').textContent = `✅ ${file.name}`
+}
+function handleModalDrop(event) {
+  event.preventDefault()
+  document.getElementById('modalDropzone').classList.remove('border-blue-400','bg-blue-50')
+  const file = event.dataTransfer.files[0]
+  if (!file) return
+  currentModalFile = file
+  document.getElementById('modalFileName').textContent = `✅ ${file.name}`
+}
+async function submitUserUpload() {
+  if (!currentModalFile) { showToast('파일을 선택해주세요', 'error'); return }
+  if (!currentUploadUser) return
+  const uploadType = document.querySelector('input[name="uploadType"]:checked')?.value || 'as_reception'
+  showToast(`${currentUploadUser} 계정으로 업로드 중...`, 'info')
+  closeUserUploadModal()
+  await processUserExcelUpload(currentModalFile, currentUploadUser, uploadType)
+}
+
+// ── 드롭존 직접 파일 선택 (패널) ──
+function handleUserFileSelect(event, username) {
+  const file = event.target.files[0]
+  if (!file) return
+  openUserUploadModal(username)
+  currentModalFile = file
+  document.getElementById('modalFileName').textContent = `✅ ${file.name}`
+}
+function handleUserFileDrop(event, username) {
+  event.preventDefault()
+  const file = event.dataTransfer.files[0]
+  if (!file) return
+  openUserUploadModal(username)
+  currentModalFile = file
+  document.getElementById('modalFileName').textContent = `✅ ${file.name}`
+}
+
+// ── Excel 파싱 후 서버에 업로드 ──
+async function processUserExcelUpload(file, username, uploadSource) {
+  try {
+    const data = await file.arrayBuffer()
+    const workbook = XLSX.read(data, { type: 'array', cellDates: true })
+    const sheet = workbook.Sheets[workbook.SheetNames[0]]
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+    if (rows.length === 0) { showToast('데이터가 없습니다', 'error'); return }
+
+    // 컬럼 매핑
+    const mapped = rows.map(row => {
+      const r = {}
+      const colMap = {
+        '고객명': 'customer_name', '실사용자': 'customer_name', '성명': 'customer_name',
+        '전화번호': 'phone', '연락처': 'phone', '소유주연락처': 'phone',
+        '주소': 'address', '설치장소': 'address', '설치주소': 'address',
+        '상세주소': 'address_detail',
+        '접수일': 'receipt_date', '설치일': 'install_date',
+        '업체명': 'company', '분류': 'category', '열원': 'heat_source',
+        'A/S내용': 'as_content', '설치팀': 'install_team',
+        '지역': 'region', '접수자': 'receptionist', '처리결과': 'as_result'
+      }
+      Object.entries(row).forEach(([k, v]) => {
+        const mapped_key = colMap[k.trim()] || k.trim().toLowerCase().replace(/\s+/g,'_')
+        r[mapped_key] = v
+      })
+      return r
+    })
+
+    const validRows = mapped.filter(r => r.customer_name || r.address)
+    if (validRows.length === 0) { showToast('유효한 데이터가 없습니다', 'error'); return }
+
+    const res = await axios.post('/api/customers/batch-upload', {
+      customers: validRows,
+      userId: state.currentUser?.id,
+      uploadSource,
+      assignedTo: username
+    })
+
+    if (res.data.success) {
+      showToast(`✅ ${username} 계정에 ${validRows.length}건 업로드 완료!`, 'success')
+      refreshAllCounts()
+      loadCustomers().then(() => updateDashboardStats())
+      // 자동 지오코딩 시작
+      setTimeout(() => manualUpdateMissingCoordinates(), 1500)
+    } else {
+      showToast('업로드 실패: ' + (res.data.message || ''), 'error')
+    }
+  } catch(e) {
+    console.error('업로드 오류:', e)
+    showToast('업로드 중 오류 발생: ' + e.message, 'error')
+  }
+}
+
+// ── 계정별 데이터 목록 모달 ──
+async function openUserDataModal(username) {
+  document.getElementById('userDataModalTitle').innerHTML =
+    `<i class="fas fa-list mr-2"></i><span class="text-blue-600">${username}</span> 데이터 목록`
+  document.getElementById('userDataModal').classList.remove('hidden')
+  document.getElementById('userDataTableBody').innerHTML =
+    '<tr><td colspan="5" class="text-center py-8 text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>로딩 중...</td></tr>'
+
+  try {
+    const res = await axios.get(`/api/customers/by-user/${username}`)
+    const customers = res.data.customers || []
+    document.getElementById('userDataCount').textContent = `총 ${customers.length}건`
+
+    if (customers.length === 0) {
+      document.getElementById('userDataTableBody').innerHTML =
+        '<tr><td colspan="5" class="text-center py-8 text-gray-400">등록된 데이터가 없습니다</td></tr>'
+      return
+    }
+
+    document.getElementById('userDataTableBody').innerHTML = customers.map(c => `
+      <tr class="hover:bg-gray-50">
+        <td class="px-3 py-2">${c.customer_name || '-'}</td>
+        <td class="px-3 py-2">${c.phone || '-'}</td>
+        <td class="px-3 py-2 text-xs text-gray-600 max-w-xs truncate">${c.address || '-'}</td>
+        <td class="px-3 py-2">
+          ${c.latitude && c.longitude
+            ? '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✅ 완료</span>'
+            : '<span class="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">⏳ 대기</span>'
+          }
+        </td>
+        <td class="px-3 py-2 text-xs text-gray-500">${c.created_at ? c.created_at.slice(0,10) : '-'}</td>
+      </tr>
+    `).join('')
+  } catch(e) {
+    document.getElementById('userDataTableBody').innerHTML =
+      '<tr><td colspan="5" class="text-center py-8 text-red-400">데이터 조회 실패</td></tr>'
+  }
+}
+function closeUserDataModal() {
+  document.getElementById('userDataModal').classList.add('hidden')
+}
+
+// ── 계정 데이터 전체 삭제 ──
+async function deleteUserData(username) {
+  const res = await axios.get(`/api/customers/by-user/${username}`)
+  const cnt = res.data.customers?.length ?? 0
+  if (cnt === 0) { showToast(`${username} 계정에 삭제할 데이터가 없습니다`, 'info'); return }
+  if (!confirm(`${username} 계정의 데이터 ${cnt}건을 모두 삭제하시겠습니까?`)) return
+  try {
+    const ids = res.data.customers.map(c => c.id)
+    await axios.post('/api/customers/batch-delete', { ids })
+    showToast(`✅ ${username} 계정 데이터 ${cnt}건 삭제 완료`, 'success')
+    refreshAllCounts()
+    loadCustomers().then(() => updateDashboardStats())
+  } catch(e) {
+    showToast('삭제 실패: ' + e.message, 'error')
+  }
 }
 
 // 사용자 지도 화면
@@ -1250,7 +1480,12 @@ function renderUserMap() {
             <i class="fas fa-map-marked-alt text-xl text-blue-600"></i>
             <div>
               <h1 class="text-base font-bold text-gray-800">고객 지도</h1>
-              <p class="text-xs text-gray-600">${state.currentUser.name}님</p>
+              <p class="text-xs text-gray-600">
+                ${state.currentUser.name}님
+                ${/^test\d+$/.test(state.currentUser.username)
+                  ? `<span class="ml-1 bg-blue-100 text-blue-700 text-xs px-1.5 py-0.5 rounded-full font-medium">${state.currentUser.username} 전용</span>`
+                  : ''}
+              </p>
             </div>
           </div>
           <div class="flex space-x-2 items-center">
