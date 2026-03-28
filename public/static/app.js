@@ -278,8 +278,8 @@ async function autoUpdateMissingCoordinates() {
   try {
     console.log('🔄 좌표 누락 고객 자동 업데이트 시작...')
     
-    // 좌표 누락 고객 조회 (최대 50개)
-    const response = await axios.get('/api/customers/missing-coordinates?limit=50')
+    // 좌표 누락 고객 조회 (최대 200개)
+    const response = await axios.get('/api/customers/missing-coordinates?limit=200')
     
     if (!response.data.success || response.data.customers.length === 0) {
       console.log('✅ 좌표 누락 고객 없음')
@@ -332,23 +332,24 @@ async function autoUpdateMissingCoordinates() {
 // 수동 좌표 업데이트 (관리자 버튼)
 async function manualUpdateMissingCoordinates() {
   try {
-    // 먼저 좌표 누락 고객 수 확인
-    const checkResponse = await axios.get('/api/customers/missing-coordinates?limit=1')
+    // 좌표 누락 고객 수 조회 (실제 전체 수 파악)
+    const checkResponse = await axios.get('/api/customers/missing-coordinates?limit=201')
     
-    if (!checkResponse.data.success || checkResponse.data.total === 0) {
+    if (!checkResponse.data.success || checkResponse.data.customers.length === 0) {
       showToast('모든 고객의 좌표가 등록되어 있습니다', 'info')
       return
     }
-    
-    // 사용자 확인
-    const totalMissing = state.customers.filter(c => !c.latitude || !c.longitude).length
-    if (!confirm(`좌표가 누락된 ${totalMissing}명의 고객 중 최대 50명의 주소를 지오코딩합니다.\n\n카카오맵 API는 하루 200개 제한이 있으므로 신중하게 사용해주세요.\n\n계속하시겠습니까?`)) {
-      return
+
+    const totalMissing = checkResponse.data.customers.length
+
+    // 200개 이상일 경우에만 확인 팝업 표시
+    if (totalMissing > 200) {
+      if (!confirm(`좌표가 누락된 주소가 200개를 초과합니다.\n한 번에 최대 200개까지 지오코딩합니다.\n\n계속하시겠습니까?`)) {
+        return
+      }
     }
-    
+
     showToast('좌표 업데이트를 시작합니다...', 'info')
-    
-    // 자동 업데이트 함수 호출
     await autoUpdateMissingCoordinates()
   } catch (error) {
     console.error('❌ 수동 업데이트 오류:', error)
@@ -1391,8 +1392,8 @@ async function processUserExcelUpload(file, username, uploadSource) {
       showToast(`✅ ${username} 계정에 ${validRows.length}건 업로드 완료!`, 'success')
       refreshAllCounts()
       loadCustomers().then(() => updateDashboardStats())
-      // 자동 지오코딩 시작
-      setTimeout(() => manualUpdateMissingCoordinates(), 1500)
+      // 자동 지오코딩 시작 (팝업 없이 바로 실행)
+      setTimeout(() => autoUpdateMissingCoordinates(), 1500)
     } else {
       showToast('업로드 실패: ' + (res.data.message || ''), 'error')
     }
