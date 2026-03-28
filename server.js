@@ -93,8 +93,13 @@ app.post('/api/auth/login', async (c) => {
   }
 })
 
-// 카카오 로그인 - 인증 코드로 액세스 토큰 요청
+// 카카오 로그인 비활성화 - 아이디/비밀번호 로그인만 사용
 app.post('/api/auth/kakao', async (c) => {
+  return c.json({ success: false, message: '카카오 로그인은 현재 사용할 수 없습니다. 아이디/비밀번호로 로그인해주세요.' }, 403)
+})
+
+// [비활성화됨] 카카오 로그인 - 인증 코드로 액세스 토큰 요청
+/* DISABLED_app.post('/api/auth/kakao_disabled', async (c) => {
   try {
     const { code } = await c.req.json()
     
@@ -227,10 +232,15 @@ app.post('/api/auth/kakao', async (c) => {
     console.error('❌ 카카오 로그인 오류:', error)
     return c.json({ success: false, message: '카카오 로그인 처리 중 오류가 발생했습니다.' }, 500)
   }
+}) */
+
+// 카카오 로그인 콜백 - 비활성화됨 (로그인 페이지로 리다이렉트)
+app.get('/api/auth/kakao/callback', async (c) => {
+  return c.redirect('/')
 })
 
-// 카카오 로그인 콜백 (리다이렉트용)
-app.get('/api/auth/kakao/callback', async (c) => {
+/* [비활성화됨] 카카오 로그인 콜백 원본
+app.get('/api/auth/kakao/callback_disabled', async (c) => {
   const code = c.req.query('code')
   const error = c.req.query('error')
   
@@ -265,12 +275,17 @@ app.get('/api/auth/kakao/callback', async (c) => {
     </body>
     </html>
   `)
-})
+}) */
 
 // ============================================
-// 카카오 설정 정보 API (프론트엔드에서 동적으로 받아옴)
+// 카카오 설정 정보 API - 비활성화됨
 // ============================================
 app.get('/api/auth/kakao/config', (c) => {
+  return c.json({ restApiKey: '', jsKey: '', redirectUri: '' })
+})
+
+/* [비활성화됨] 카카오 설정 정보 원본
+app.get('/api/auth/kakao/config_disabled', (c) => {
   // 브라우저가 실제로 접속한 도메인을 헤더에서 동적으로 감지
   // 우선순위: X-Forwarded-Host > Host 헤더 > BASE_URL 환경변수
   const forwardedHost = c.req.header('x-forwarded-host')
@@ -302,7 +317,7 @@ app.get('/api/auth/kakao/config', (c) => {
     jsKey,
     redirectUri
   })
-})
+}) */
 
 // ============================================
 // 고객 관리 API

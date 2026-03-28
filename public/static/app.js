@@ -83,129 +83,8 @@ async function login(username, password) {
   }
 }
 
-// 카카오 로그인 함수
-async function loginWithKakao() {
-  try {
-    // 서버에서 카카오 설정 정보 동적으로 가져오기
-    let restApiKey, redirectUri
-    try {
-      const configRes = await axios.get('/api/auth/kakao/config')
-      restApiKey = configRes.data.restApiKey
-      redirectUri = configRes.data.redirectUri
-      console.log('✅ 카카오 설정 로드 성공 - redirectUri:', redirectUri)
-    } catch (configErr) {
-      console.warn('⚠️ 카카오 설정 API 실패, 기본값 사용:', configErr)
-      restApiKey = 'c933c69ba4e0228895438c6a8c327e74'
-      redirectUri = `${window.location.origin}/api/auth/kakao/callback`
-    }
-
-    if (!restApiKey) {
-      showToast('카카오 REST API Key가 설정되지 않았습니다. 관리자에게 문의하세요.', 'error')
-      return
-    }
-    
-    // 카카오 인증 URL
-    const kakaoAuthUrl = `https://kauth.kakao.com/oauth/authorize?client_id=${restApiKey}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code`
-    
-    // 팝업으로 카카오 로그인 창 열기
-    const popup = window.open(
-      kakaoAuthUrl,
-      'kakao-login',
-      'width=500,height=700,scrollbars=yes'
-    )
-    
-    if (!popup) {
-      showToast('팝업이 차단되었습니다. 팝업 차단을 해제해주세요.', 'error')
-      return
-    }
-    
-    // 팝업에서 인증 코드 받기
-    window.addEventListener('message', async (event) => {
-      if (event.data.type === 'KAKAO_AUTH' && event.data.code) {
-        const code = event.data.code
-        console.log('✅ 카카오 인증 코드 수신:', code.substring(0, 10) + '...')
-        
-        // 백엔드로 인증 코드 전송
-        try {
-          const response = await axios.post('/api/auth/kakao', { code })
-          
-          if (response.data.success) {
-            saveSession(response.data.user)
-            showToast('카카오 로그인 성공!', 'success')
-            
-            // 로그인 성공 후 알림 권한 요청 및 푸시 구독
-            setTimeout(async () => {
-              const permission = await requestNotificationPermission()
-              if (permission === 'granted') {
-                await subscribeToPushNotifications()
-              }
-            }, 1000) // 1초 후 실행 (UI 렌더링 후)
-            
-            // 역할에 따라 화면 전환
-            if (response.data.user.role === 'admin') {
-              renderAdminDashboard()
-            } else {
-              renderUserMap()
-            }
-          } else {
-            showToast(response.data.message || '카카오 로그인 실패', 'error')
-          }
-        } catch (error) {
-          console.error('❌ 카카오 로그인 오류:', error)
-          showToast('카카오 로그인 중 오류가 발생했습니다', 'error')
-        }
-      }
-    })
-    
-  } catch (error) {
-    console.error('❌ 카카오 로그인 오류:', error)
-    showToast('카카오 로그인 중 오류가 발생했습니다', 'error')
-  }
-}
-
-// URL에서 카카오 인증 코드 처리 (리다이렉트 방식)
-function handleKakaoCodeFromURL() {
-  const urlParams = new URLSearchParams(window.location.search)
-  const code = urlParams.get('kakao_code')
-  
-  if (code) {
-    console.log('🔐 URL에서 카카오 인증 코드 감지:', code.substring(0, 10) + '...')
-    
-    // URL에서 code 파라미터 제거
-    window.history.replaceState({}, document.title, '/')
-    
-    // 백엔드로 인증 코드 전송
-    axios.post('/api/auth/kakao', { code })
-      .then(response => {
-        if (response.data.success) {
-          saveSession(response.data.user)
-          showToast('카카오 로그인 성공!', 'success')
-          
-          // 로그인 성공 후 알림 권한 요청 및 푸시 구독
-          setTimeout(async () => {
-            const permission = await requestNotificationPermission()
-            if (permission === 'granted') {
-              await subscribeToPushNotifications()
-            }
-          }, 1000)
-          
-          if (response.data.user.role === 'admin') {
-            renderAdminDashboard()
-          } else {
-            renderUserMap()
-          }
-        } else {
-          showToast(response.data.message || '카카오 로그인 실패', 'error')
-          renderLogin()
-        }
-      })
-      .catch(error => {
-        console.error('❌ 카카오 로그인 오류:', error)
-        showToast('카카오 로그인 중 오류가 발생했습니다', 'error')
-        renderLogin()
-      })
-  }
-}
+// 카카오 로그인 기능은 제거됨 - 아이디/비밀번호 로그인만 사용
+// (카카오 지도 및 카카오톡 공유 기능은 별도로 유지됨)
 
 async function loadCustomers() {
   try {
@@ -715,21 +594,6 @@ function renderLogin() {
           </button>
         </form>
         
-        <div class="mt-4 flex items-center">
-          <div class="flex-1 border-t border-gray-300"></div>
-          <span class="px-4 text-gray-500 text-sm">또는</span>
-          <div class="flex-1 border-t border-gray-300"></div>
-        </div>
-        
-        <button 
-          onclick="loginWithKakao()" 
-          class="w-full mt-4 bg-yellow-400 text-gray-900 py-3 rounded-lg hover:bg-yellow-500 transition font-semibold flex items-center justify-center"
-        >
-          <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 3C6.477 3 2 6.477 2 10.75c0 2.866 2.038 5.366 5.038 6.75l-1.288 4.5 4.5-3c.75.15 1.537.25 2.35.25 5.523 0 10-3.477 10-7.75S17.523 3 12 3z"/>
-          </svg>
-          카카오 로그인
-        </button>
       </div>
       
       <!-- 푸터 (사업자 정보) -->
@@ -4493,7 +4357,6 @@ window.toggleMapType = toggleMapType
 window.togglePasswordVisibility = togglePasswordVisibility
 window.renderLogin = renderLogin
 window.renderRegister = renderRegister
-window.loginWithKakao = loginWithKakao
 window.openKakaoTalk = openKakaoTalk
 window.shareCustomerViaKakao = shareCustomerViaKakao
 window.closeNotification = closeNotification
@@ -4523,9 +4386,6 @@ function initApp() {
     console.error('❌ app 엘리먼트를 찾을 수 없습니다!')
     return
   }
-  
-  // URL에서 카카오 인증 코드 확인
-  handleKakaoCodeFromURL()
   
   // 세션 확인
   if (loadSession()) {
