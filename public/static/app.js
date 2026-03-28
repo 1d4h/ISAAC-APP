@@ -1321,11 +1321,14 @@ function handleModalDrop(event) {
 async function submitUserUpload() {
   if (!currentModalFile) { showToast('파일을 선택해주세요', 'error'); return }
   if (!currentUploadUser) return
+  // ★ 모달을 닫기 전에 로컬 변수에 먼저 저장 (close 시 null 초기화 방지)
+  const fileToUpload = currentModalFile
+  const userToUpload = currentUploadUser
   // 업로드 유형 고정: 현장 통합 관리
   const uploadType = 'field_management'
-  showToast(`${currentUploadUser} 계정으로 업로드 중...`, 'info')
-  closeUserUploadModal()
-  await processUserExcelUpload(currentModalFile, currentUploadUser, uploadType)
+  closeUserUploadModal()  // 이 시점에 currentModalFile = null 됨 (fileToUpload는 유지)
+  showToast(`${userToUpload} 계정으로 업로드 중...`, 'info')
+  await processUserExcelUpload(fileToUpload, userToUpload, uploadType)
 }
 
 // ── 드롭존 직접 파일 선택 (패널) ──
