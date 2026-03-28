@@ -1161,24 +1161,13 @@ function renderAdminDashboard() {
           <button onclick="closeUserUploadModal()" class="text-gray-400 hover:text-gray-700 text-xl">&times;</button>
         </div>
         <div class="p-5 space-y-4">
-          <!-- 업로드 타입 선택 -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">업로드 유형</label>
-            <div class="flex gap-3">
-              <label class="flex-1 flex items-center gap-2 border rounded-lg p-3 cursor-pointer hover:bg-blue-50 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
-                <input type="radio" name="uploadType" value="as_reception" checked class="text-blue-600">
-                <div>
-                  <p class="text-sm font-medium">A/S 접수대장</p>
-                  <p class="text-xs text-gray-500">고객명, 연락처, 주소</p>
-                </div>
-              </label>
-              <label class="flex-1 flex items-center gap-2 border rounded-lg p-3 cursor-pointer hover:bg-green-50 has-[:checked]:border-green-500 has-[:checked]:bg-green-50">
-                <input type="radio" name="uploadType" value="field_management" class="text-green-600">
-                <div>
-                  <p class="text-sm font-medium">현장 통합 관리</p>
-                  <p class="text-xs text-gray-500">실사용자, 설치장소</p>
-                </div>
-              </label>
+          <!-- 업로드 유형 고정: 현장 통합 관리 -->
+          <input type="hidden" name="uploadType" value="field_management">
+          <div class="flex items-center gap-3 px-4 py-3 bg-green-50 border border-green-200 rounded-lg">
+            <i class="fas fa-hard-hat text-green-600 text-lg"></i>
+            <div>
+              <p class="text-sm font-semibold text-green-800">현장 통합 관리</p>
+              <p class="text-xs text-green-600">실사용자, 설치장소 정보를 업로드합니다</p>
             </div>
           </div>
           <!-- 파일 선택 -->
@@ -1332,7 +1321,8 @@ function handleModalDrop(event) {
 async function submitUserUpload() {
   if (!currentModalFile) { showToast('파일을 선택해주세요', 'error'); return }
   if (!currentUploadUser) return
-  const uploadType = document.querySelector('input[name="uploadType"]:checked')?.value || 'as_reception'
+  // 업로드 유형 고정: 현장 통합 관리
+  const uploadType = 'field_management'
   showToast(`${currentUploadUser} 계정으로 업로드 중...`, 'info')
   closeUserUploadModal()
   await processUserExcelUpload(currentModalFile, currentUploadUser, uploadType)
