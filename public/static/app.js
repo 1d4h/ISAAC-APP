@@ -1347,7 +1347,8 @@ function renderUserMap() {
             </div>
           </div>
           <div class="flex space-x-2 items-center">
-            <!-- 알림 권한 상태 표시 -->
+            <!-- 알림 권한 상태 표시 (관리자만) -->
+            ${state.currentUser.role === 'admin' ? `
             <button 
               id="notificationStatusBtn"
               onclick="requestNotificationPermission()" 
@@ -1356,6 +1357,7 @@ function renderUserMap() {
             >
               <i id="notificationStatusIcon" class="fas fa-bell-slash text-gray-400"></i>
             </button>
+            ` : ''}
             
             ${state.currentUser.role === 'admin' ? `
             <button onclick="renderAdminDashboard()" class="px-3 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
@@ -3517,14 +3519,20 @@ function showBrowserNotification(title, options = {}) {
   }
 }
 
-// 알림 폴링 시작
+// 알림 폴링 시작 (관리자 계정에서만 동작)
 function startNotificationPolling() {
   if (!state.currentUser) {
     console.log('⚠️ 로그인된 사용자가 없어 알림 폴링을 시작하지 않습니다')
     return
   }
   
-  console.log('📢 알림 폴링 시작:', state.currentUser.name)
+  // 일반 사용자(test1~10)는 알림 폴링 비활성화
+  if (state.currentUser.role !== 'admin') {
+    console.log('ℹ️ 일반 사용자는 알림 폴링을 사용하지 않습니다:', state.currentUser.username)
+    return
+  }
+  
+  console.log('📢 알림 폴링 시작 (admin):', state.currentUser.name)
   
   // 기존 폴링이 있으면 중지
   if (state.notificationPollingInterval) {
@@ -3565,9 +3573,11 @@ function stopNotificationPolling() {
   }
 }
 
-// 알림 확인
+// 알림 확인 (관리자만)
 async function checkNotifications() {
   if (!state.currentUser) return
+  // 일반 사용자는 알림 확인 불필요
+  if (state.currentUser.role !== 'admin') return
   
   try {
     const response = await axios.get(`/api/notifications?user_id=${state.currentUser.id}`)

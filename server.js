@@ -994,14 +994,15 @@ app.post('/api/customers/as-result', async (c) => {
     
     console.log('✅ A/S 결과 저장 완료')
     
-    // 4. 알림 생성 및 Web Push 전송 (모든 사용자에게)
+    // 4. 알림 생성 및 Web Push 전송 (관리자 계정에만)
     if (userName && customerName) {
-      console.log('📢 알림 생성 시작...')
+      console.log('📢 알림 생성 시작 (admin 전용)...')
       
-      // 모든 사용자 조회
+      // admin 역할 사용자만 조회
       const { data: users, error: usersError } = await supabase
         .from('users')
         .select('id, username, name')
+        .eq('role', 'admin')
       
       if (!usersError && users && users.length > 0) {
         // 각 사용자에게 알림 생성
@@ -1025,11 +1026,13 @@ app.post('/api/customers/as-result', async (c) => {
           console.log(`✅ 알림 생성 완료: ${notifData.length}개`)
         }
         
-        // 5. Web Push 전송 (모든 사용자의 구독 정보 조회)
-        console.log('📢 Web Push 전송 시작...')
+        // 5. Web Push 전송 (admin 사용자의 구독 정보만 조회)
+        console.log('📢 Web Push 전송 시작 (admin 전용)...')
+        const adminUserIds = users.map(u => u.id)
         const { data: subscriptions, error: subsError } = await supabase
           .from('push_subscriptions')
           .select('*')
+          .in('user_id', adminUserIds)
         
         if (!subsError && subscriptions && subscriptions.length > 0) {
           const pushPayload = JSON.stringify({
@@ -1557,19 +1560,20 @@ app.post('/api/notifications/create', async (c) => {
       return c.json({ success: false, message: '필수 정보가 누락되었습니다.' }, 400)
     }
     
-    console.log('📢 알림 생성 시작:', { customer_name, completed_by_name })
+    console.log('📢 알림 생성 시작 (admin 전용):', { customer_name, completed_by_name })
     
-    // 모든 사용자 조회 (알림을 받을 대상)
+    // admin 역할 사용자만 조회 (알림 수신 대상)
     const { data: users, error: usersError } = await supabase
       .from('users')
       .select('id, username, name')
+      .eq('role', 'admin')
     
     if (usersError) {
       console.error('❌ 사용자 조회 오류:', usersError)
       return c.json({ success: false, message: '사용자 조회 중 오류가 발생했습니다.' }, 500)
     }
     
-    console.log(`📢 알림 대상: ${users.length}명`)
+    console.log(`📢 알림 대상 (admin): ${users.length}명`)
     
     // 각 사용자에게 알림 생성
     const notifications = users.map(user => ({
