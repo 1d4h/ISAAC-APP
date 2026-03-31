@@ -1815,7 +1815,107 @@ function getMarkerBgColor(markerColor) {
   return colors[markerColor] || colors['b']
 }
 
-// 네이버 지도 초기화
+// ── 마커 크기 계산 (카카오 줌 레벨 기준: 1=최대확대, 14=최소확대) ──
+function getMarkerSizeByZoom(zoomLevel) {
+  // 카카오 지도: 레벨 1=최대 확대, 레벨 14=최소 확대
+  // 레벨이 낮을수록(확대) → 마커 크게, 높을수록(축소) → 마커 작게
+  if (zoomLevel <= 2)       return { balloon: 72, badge: 28, fontSize: 16, nameSize: 13, tail: 13 }
+  else if (zoomLevel <= 3)  return { balloon: 62, badge: 24, fontSize: 14, nameSize: 12, tail: 11 }
+  else if (zoomLevel <= 4)  return { balloon: 54, badge: 21, fontSize: 13, nameSize: 11, tail: 10 }
+  else if (zoomLevel <= 5)  return { balloon: 46, badge: 18, fontSize: 12, nameSize: 10, tail: 9  }
+  else if (zoomLevel <= 6)  return { balloon: 40, badge: 15, fontSize: 11, nameSize: 10, tail: 8  }
+  else if (zoomLevel <= 8)  return { balloon: 34, badge: 13, fontSize: 10, nameSize: 9,  tail: 7  }
+  else if (zoomLevel <= 10) return { balloon: 28, badge: 11, fontSize: 9,  nameSize: 8,  tail: 6  }
+  else                      return { balloon: 24, badge: 9,  fontSize: 8,  nameSize: 7,  tail: 5  }
+}
+
+// ── 말풍선 마커 HTML 생성 ──
+// zoomLevel: 카카오 지도 레벨, index: 순번(1-based), customer: 고객 객체, bgColor: 배경색
+function buildMarkerHTML(customer, index, bgColor, zoomLevel) {
+  const sz = getMarkerSizeByZoom(zoomLevel)
+  const displayName = customer.customer_name.length > 10
+    ? customer.customer_name.substring(0, 10)
+    : customer.customer_name
+
+  const bw = sz.balloon           // 말풍선 가로
+  const bh = Math.round(bw * 0.72) // 말풍선 세로
+  const br = Math.round(bw * 0.22) // border-radius
+  const badgeDiam = Math.round(sz.badge * 1.8) // 원형 뱃지 지름
+
+  return `
+    <div onclick="handleMarkerClick('${customer.id}')"
+         class="custom-marker"
+         id="marker-cid-${customer.id}"
+         data-customer-id="${customer.id}"
+         style="position:relative; cursor:pointer; transform:translate(-50%,-100%);
+                display:flex; flex-direction:column; align-items:center; user-select:none;">
+      <!-- 고객명 라벨 (말풍선 위) -->
+      <div style="
+        background: rgba(255,255,255,0.97);
+        color: #1a1a1a;
+        font-size: ${sz.nameSize}px;
+        font-weight: 700;
+        padding: 2px 6px;
+        border-radius: 4px;
+        white-space: nowrap;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        margin-bottom: 3px;
+        border: 1px solid rgba(0,0,0,0.12);
+        line-height: 1.4;
+        max-width: ${bw + 20}px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        letter-spacing: -0.3px;
+      ">${displayName}</div>
+      <!-- 말풍선 본체 -->
+      <div style="
+        width: ${bw}px;
+        height: ${bh}px;
+        background: ${bgColor};
+        border-radius: ${br}px;
+        border: 2.5px solid white;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+      ">
+        <!-- 원형 번호 뱃지 -->
+        <div style="
+          width: ${badgeDiam}px;
+          height: ${badgeDiam}px;
+          background: rgba(255,255,255,0.28);
+          border: 2px solid rgba(255,255,255,0.85);
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: inset 0 1px 3px rgba(0,0,0,0.15);
+        ">
+          <span style="
+            color: white;
+            font-size: ${sz.fontSize}px;
+            font-weight: 900;
+            line-height: 1;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+            letter-spacing: -0.5px;
+          ">${index}</span>
+        </div>
+      </div>
+      <!-- 말풍선 꼬리 (하단 중앙 삼각형) -->
+      <div style="
+        width: 0; height: 0;
+        border-left: ${sz.tail}px solid transparent;
+        border-right: ${sz.tail}px solid transparent;
+        border-top: ${sz.tail + 4}px solid ${bgColor};
+        margin-top: -1px;
+        filter: drop-shadow(0 3px 2px rgba(0,0,0,0.25));
+      "></div>
+    </div>
+  `
+}
+
+
 function initKakaoMap() {
   console.log('🗺️ Kakao Maps 초기화 시작...')
   
@@ -1917,105 +2017,37 @@ function initKakaoMap() {
     // 고객 마커 추가
     console.log(`📍 마커 생성 시작 - 고객 수: ${validCustomers.length}`)
     
+    const currentZoom = state.map.getLevel()
     validCustomers.forEach((customer, index) => {
       try {
-        // AS결과에 따라 마커 색상 및 아이콘 결정
         const markerColor = getMarkerColorByStatus(customer.as_result)
+        const bgColor = markerColor === 'gray' ? '#9CA3AF'
+          : markerColor === 'g' ? '#10B981'
+          : markerColor === 'y' ? '#F59E0B'
+          : markerColor === 'r' ? '#EF4444'
+          : '#3B82F6'
         
-        let bgColor, iconColor, iconClass, statusText
-        if (markerColor === 'gray') {
-          bgColor = '#D1D5DB'  // 연한 회색 (A/S 완료)
-          iconColor = '#6B7280'
-          iconClass = 'fa-check-circle'
-          statusText = 'A/S 완료'
-        } else if (markerColor === 'g') {
-          bgColor = '#10B981'  // 초록색 (완료)
-          iconColor = '#FFFFFF'
-          iconClass = 'fa-check-circle'
-          statusText = '완료'
-        } else if (markerColor === 'y') {
-          bgColor = '#F59E0B'  // 노란색 (대기)
-          iconColor = '#FFFFFF'
-          iconClass = 'fa-clock'
-          statusText = '대기'
-        } else if (markerColor === 'r') {
-          bgColor = '#EF4444'  // 빨간색 (미완료)
-          iconColor = '#FFFFFF'
-          iconClass = 'fa-exclamation-circle'
-          statusText = '미완료'
-        } else {
-          bgColor = '#3B82F6'  // 파란색 (기본)
-          iconColor = '#FFFFFF'
-          iconClass = 'fa-map-marker-alt'
-          statusText = '기본'
-        }
-        
-        // 고객명 짧게 표시 (최대 4글자)
-        const shortName = customer.customer_name.length > 4 
-          ? customer.customer_name.substring(0, 4) 
-          : customer.customer_name
-        
-        // 각 마커에 고유 ID 생성 (customer.id만 사용)
-        const uniqueMarkerId = `marker-cid-${customer.id}`
-        
-        // CustomOverlay로 핀포인트 마커 생성 (작은 핀 + 위에 고객명 + 핀 안에 순번)
-        const markerContent = `
-          <div onclick="handleMarkerClick('${customer.id}')" class="custom-marker" id="${uniqueMarkerId}" data-customer-id="${customer.id}" style="position: relative; cursor: pointer; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center;">
-            <!-- 고객명 라벨 (핀 위) -->
-            <div style="
-              background: rgba(255,255,255,0.92);
-              color: #222;
-              font-size: 11px;
-              font-weight: 600;
-              padding: 2px 5px;
-              border-radius: 4px;
-              white-space: nowrap;
-              box-shadow: 0 1px 4px rgba(0,0,0,0.25);
-              margin-bottom: 3px;
-              line-height: 1.3;
-              border: 1px solid rgba(0,0,0,0.12);
-            ">${shortName}</div>
-            <!-- 핀 본체 -->
-            <div style="display: flex; flex-direction: column; align-items: center;">
-              <!-- 원형 헤드 -->
-              <div style="
-                width: 26px;
-                height: 26px;
-                background: ${bgColor};
-                border-radius: 50%;
-                box-shadow: 0 2px 6px rgba(0,0,0,0.35);
-                border: 2px solid white;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-              ">
-                <span style="color: white; font-size: 11px; font-weight: 700; line-height: 1;">${index + 1}</span>
-              </div>
-              <!-- 핀 꼬리 -->
-              <div style="
-                width: 0; height: 0;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 8px solid ${bgColor};
-                margin-top: -1px;
-              "></div>
-            </div>
-          </div>
-        `
-        
+        const markerHTML = buildMarkerHTML(customer, index + 1, bgColor, currentZoom)
+        const tempDiv = document.createElement('div')
+        tempDiv.innerHTML = markerHTML.trim()
+        const markerElement = tempDiv.firstElementChild || markerHTML
         const customOverlay = new kakao.maps.CustomOverlay({
           position: new kakao.maps.LatLng(customer.latitude, customer.longitude),
-          content: markerContent,
+          content: markerElement,
           zIndex: 100
         })
-        
         customOverlay.setMap(state.map)
-        
         state.markers.push(customOverlay)
-        console.log(`✅ 마커 ${index + 1} 생성 완료: ${customer.customer_name} (${statusText})`)
       } catch (error) {
         console.error(`❌ 마커 ${index + 1} 생성 실패:`, error)
       }
+    })
+    
+    // 줌 변경 시 마커 크기 자동 갱신
+    kakao.maps.event.addListener(state.map, 'zoom_changed', () => {
+      const zoom = state.map.getLevel()
+      console.log('🔍 줌 변경:', zoom, '→ 마커 크기 갱신')
+      refreshMarkersForZoom(zoom)
     })
     
     console.log(`✅ Kakao Maps 초기화 완료: ${validCustomers.length}개의 마커 생성 시도, ${state.markers.length}개 성공`)
@@ -2038,6 +2070,30 @@ function initKakaoMap() {
     showMapFallback()
     showToast('지도 로드 실패: Kakao Maps API를 확인해주세요', 'error')
   }
+}
+
+// 줌 변경 시 마커 HTML을 새 크기로 갱신 (오버레이 내용 교체)
+function refreshMarkersForZoom(zoomLevel) {
+  if (!state.map || state.markers.length === 0) return
+  const validCustomers = state.customers.filter(c => c.latitude && c.longitude)
+  state.markers.forEach((overlay, idx) => {
+    const cust = validCustomers[idx]
+    if (!cust) return
+    const markerColor = getMarkerColorByStatus(cust.as_result)
+    const bgColor = markerColor === 'gray' ? '#9CA3AF'
+      : markerColor === 'g' ? '#10B981'
+      : markerColor === 'y' ? '#F59E0B'
+      : markerColor === 'r' ? '#EF4444'
+      : '#3B82F6'
+    const newHTML = buildMarkerHTML(cust, idx + 1, bgColor, zoomLevel)
+    // DOM 엘리먼트로 변환하여 CustomOverlay content 교체
+    const tempDiv = document.createElement('div')
+    tempDiv.innerHTML = newHTML.trim()
+    const newElement = tempDiv.firstElementChild
+    if (newElement) {
+      overlay.setContent(newElement)
+    }
+  })
 }
 
 // GPS 버튼 스타일 업데이트
@@ -4244,89 +4300,26 @@ function updateMarkerColor(customerId, status) {
     
     // 유효한 고객만 필터링
     const validCustomers = state.customers.filter(c => c.latitude && c.longitude)
+    const currentZoom = state.map.getLevel()
     
-    // 마커 재생성
-    validCustomers.forEach((cust) => {
+    // buildMarkerHTML로 통일된 말풍선 마커 재생성
+    validCustomers.forEach((cust, idx) => {
       const markerColor = getMarkerColorByStatus(cust.as_result)
+      const bgColor = markerColor === 'gray' ? '#9CA3AF'
+        : markerColor === 'g' ? '#10B981'
+        : markerColor === 'y' ? '#F59E0B'
+        : markerColor === 'r' ? '#EF4444'
+        : '#3B82F6'
       
-      let bgColor, iconColor, iconClass
-      if (markerColor === 'gray') {
-        bgColor = '#D1D5DB'  // 연한 회색 (A/S 완료)
-        iconColor = '#6B7280'
-        iconClass = 'fa-check-circle'
-      } else if (markerColor === 'g') {
-        bgColor = '#10B981'  // 초록색
-        iconColor = '#FFFFFF'
-        iconClass = 'fa-check-circle'
-      } else if (markerColor === 'y') {
-        bgColor = '#F59E0B'  // 노란색
-        iconColor = '#FFFFFF'
-        iconClass = 'fa-clock'
-      } else if (markerColor === 'r') {
-        bgColor = '#EF4444'  // 빨간색
-        iconColor = '#FFFFFF'
-        iconClass = 'fa-exclamation-circle'
-      } else {
-        bgColor = '#3B82F6'  // 파란색 (기본)
-        iconColor = '#FFFFFF'
-        iconClass = 'fa-map-marker-alt'
-      }
-      
-      // 고객명 짧게 표시 (최대 4글자)
-      const shortName = cust.customer_name.length > 4
-        ? cust.customer_name.substring(0, 4)
-        : cust.customer_name
-
-      const markerContent = `
-        <div onclick="handleMarkerClick('${cust.id}')" class="custom-marker" id="marker-cid-${cust.id}" data-customer-id="${cust.id}" style="position: relative; cursor: pointer; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center;">
-          <!-- 고객명 라벨 (핀 위) -->
-          <div style="
-            background: rgba(255,255,255,0.92);
-            color: #222;
-            font-size: 11px;
-            font-weight: 600;
-            padding: 2px 5px;
-            border-radius: 4px;
-            white-space: nowrap;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.25);
-            margin-bottom: 3px;
-            line-height: 1.3;
-            border: 1px solid rgba(0,0,0,0.12);
-          ">${shortName}</div>
-          <!-- 핀 본체 -->
-          <div style="display: flex; flex-direction: column; align-items: center;">
-            <!-- 원형 헤드 -->
-            <div style="
-              width: 26px;
-              height: 26px;
-              background: ${bgColor};
-              border-radius: 50%;
-              box-shadow: 0 2px 6px rgba(0,0,0,0.35);
-              border: 2px solid white;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-            ">
-              <span style="color: white; font-size: 11px; font-weight: 700; line-height: 1;">${validCustomers.indexOf(cust) + 1}</span>
-            </div>
-            <!-- 핀 꼬리 -->
-            <div style="
-              width: 0; height: 0;
-              border-left: 5px solid transparent;
-              border-right: 5px solid transparent;
-              border-top: 8px solid ${bgColor};
-              margin-top: -1px;
-            "></div>
-          </div>
-        </div>
-      `
-      
+      const markerHTML = buildMarkerHTML(cust, idx + 1, bgColor, currentZoom)
+      const tempDiv = document.createElement('div')
+      tempDiv.innerHTML = markerHTML.trim()
+      const markerElement = tempDiv.firstElementChild || markerHTML
       const customOverlay = new kakao.maps.CustomOverlay({
         position: new kakao.maps.LatLng(cust.latitude, cust.longitude),
-        content: markerContent,
+        content: markerElement,
         zIndex: 100
       })
-      
       customOverlay.setMap(state.map)
       state.markers.push(customOverlay)
     })
