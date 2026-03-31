@@ -1834,8 +1834,8 @@ function getMarkerSizeByZoom(zoomLevel) {
 // SVG 기반 물방울 모양 핀 + 상단 원형 뱃지 + 고객명 라벨
 function buildMarkerHTML(customer, index, bgColor, zoomLevel) {
   const sz = getMarkerSizeByZoom(zoomLevel)
-  const displayName = customer.customer_name.length > 10
-    ? customer.customer_name.substring(0, 10)
+  const displayName = customer.customer_name.length > 15
+    ? customer.customer_name.substring(0, 15)
     : customer.customer_name
 
   const pw = sz.pinW   // 핀 SVG 너비
@@ -1869,7 +1869,7 @@ function buildMarkerHTML(customer, index, bgColor, zoomLevel) {
   // 라벨 최소 너비: 한글 10글자 기준 (한글 1자 ≈ nameSize * 1.1px), + 좌우 패딩
   const charW = Math.round(sz.nameSize * 1.1)      // 한글 한 글자 너비 추정
   const padH  = parseInt(sz.namePad.split(' ')[1])  // 좌우 패딩 px
-  const labelMinW = Math.max(pw + 10, charW * 10 + padH * 2)
+  const labelMinW = Math.max(pw + 10, charW * 15 + padH * 2)
 
   return `
     <div onclick="handleMarkerClick('${customer.id}')"
@@ -1878,7 +1878,7 @@ function buildMarkerHTML(customer, index, bgColor, zoomLevel) {
          data-customer-id="${customer.id}"
          style="position:relative; cursor:pointer; transform:translate(-50%,-100%);
                 display:flex; flex-direction:column; align-items:center; user-select:none;">
-      <!-- 고객명 라벨 (핀 위, 최대 10글자 보장) -->
+      <!-- 고객명 라벨 (핀 위, 최대 15글자 보장) -->
       <div style="
         background: rgba(255,255,255,0.97);
         color: #1a1a1a;
@@ -1905,27 +1905,26 @@ function buildMarkerHTML(customer, index, bgColor, zoomLevel) {
           <!-- 흰색 테두리 효과 -->
           <path d="${svgPath}" fill="none" stroke="white" stroke-width="2.5" stroke-linejoin="round" />
         </svg>
-        <!-- 원형 번호 뱃지 (핀 원 중앙에 오버레이) -->
+        <!-- 원형 번호 뱃지 (핀 원 중앙에 오버레이) - 흰색 배경 + 검은색 숫자 -->
         <div style="
           position: absolute;
           top: ${Math.round(cy - bd)}px;
           left: ${Math.round(cx - bd)}px;
           width: ${badgeDiam}px;
           height: ${badgeDiam}px;
-          background: rgba(255,255,255,0.22);
-          border: ${Math.max(1.5, bd * 0.15)}px solid rgba(255,255,255,0.9);
+          background: white;
+          border: ${Math.max(1.5, bd * 0.12)}px solid rgba(0,0,0,0.15);
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
-          box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+          box-shadow: 0 1px 4px rgba(0,0,0,0.3);
         ">
           <span style="
-            color: white;
+            color: #111111;
             font-size: ${sz.fontSize}px;
             font-weight: 900;
             line-height: 1;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.45);
             letter-spacing: -0.5px;
           ">${index}</span>
         </div>
