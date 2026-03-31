@@ -1867,9 +1867,7 @@ function buildMarkerHTML(customer, index, bgColor, zoomLevel) {
   // 뱃지는 핀 상단 원 중심에 오버레이 (절대 위치)
   const badgeDiam = bd * 2
   // 라벨 최소 너비: 한글 10글자 기준 (한글 1자 ≈ nameSize * 1.1px), + 좌우 패딩
-  const charW = Math.round(sz.nameSize * 1.1)      // 한글 한 글자 너비 추정
-  const padH  = parseInt(sz.namePad.split(' ')[1])  // 좌우 패딩 px
-  const labelMinW = Math.max(pw + 10, charW * 15 + padH * 2)
+  // 라벨은 글자 수에 맞게 자동 조절 (min-width 제거, display:inline-block)
 
   return `
     <div onclick="handleMarkerClick('${customer.id}')"
@@ -1878,8 +1876,9 @@ function buildMarkerHTML(customer, index, bgColor, zoomLevel) {
          data-customer-id="${customer.id}"
          style="position:relative; cursor:pointer; transform:translate(-50%,-100%);
                 display:flex; flex-direction:column; align-items:center; user-select:none;">
-      <!-- 고객명 라벨 (핀 위, 최대 15글자 보장) -->
+      <!-- 고객명 라벨 (핀 위, 최대 15글자 / 글자 수에 맞게 너비 자동 조절) -->
       <div style="
+        display: inline-block;
         background: rgba(255,255,255,0.97);
         color: #1a1a1a;
         font-size: ${sz.nameSize}px;
@@ -1891,8 +1890,6 @@ function buildMarkerHTML(customer, index, bgColor, zoomLevel) {
         margin-bottom: 4px;
         border: 1px solid rgba(0,0,0,0.1);
         line-height: 1.4;
-        min-width: ${labelMinW}px;
-        text-align: center;
         letter-spacing: -0.2px;
       ">${displayName}</div>
       <!-- 핀 전체 래퍼 (SVG + 뱃지 오버레이) -->
