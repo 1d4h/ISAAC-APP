@@ -1818,29 +1818,58 @@ function getMarkerBgColor(markerColor) {
 // ── 마커 크기 계산 (카카오 줌 레벨 기준: 1=최대확대, 14=최소확대) ──
 function getMarkerSizeByZoom(zoomLevel) {
   // 카카오 지도: 레벨 1=최대 확대, 레벨 14=최소 확대
-  // 레벨이 낮을수록(확대) → 마커 크게, 높을수록(축소) → 마커 작게
-  if (zoomLevel <= 2)       return { balloon: 72, badge: 28, fontSize: 16, nameSize: 13, tail: 13 }
-  else if (zoomLevel <= 3)  return { balloon: 62, badge: 24, fontSize: 14, nameSize: 12, tail: 11 }
-  else if (zoomLevel <= 4)  return { balloon: 54, badge: 21, fontSize: 13, nameSize: 11, tail: 10 }
-  else if (zoomLevel <= 5)  return { balloon: 46, badge: 18, fontSize: 12, nameSize: 10, tail: 9  }
-  else if (zoomLevel <= 6)  return { balloon: 40, badge: 15, fontSize: 11, nameSize: 10, tail: 8  }
-  else if (zoomLevel <= 8)  return { balloon: 34, badge: 13, fontSize: 10, nameSize: 9,  tail: 7  }
-  else if (zoomLevel <= 10) return { balloon: 28, badge: 11, fontSize: 9,  nameSize: 8,  tail: 6  }
-  else                      return { balloon: 24, badge: 9,  fontSize: 8,  nameSize: 7,  tail: 5  }
+  // pinW: 핀 전체 너비, pinH: 핀 전체 높이(꼬리 포함), badge: 원형뱃지 반지름
+  // fontSize: 숫자 크기, nameSize: 고객명 글자 크기, namePad: 라벨 패딩
+  if (zoomLevel <= 2)       return { pinW: 60, pinH: 80, badge: 18, fontSize: 17, nameSize: 13, namePad: '3px 10px' }
+  else if (zoomLevel <= 3)  return { pinW: 52, pinH: 70, badge: 16, fontSize: 15, nameSize: 12, namePad: '3px 9px'  }
+  else if (zoomLevel <= 4)  return { pinW: 44, pinH: 59, badge: 13, fontSize: 13, nameSize: 11, namePad: '2px 8px'  }
+  else if (zoomLevel <= 5)  return { pinW: 38, pinH: 51, badge: 11, fontSize: 12, nameSize: 10, namePad: '2px 7px'  }
+  else if (zoomLevel <= 6)  return { pinW: 32, pinH: 43, badge: 10, fontSize: 11, nameSize: 10, namePad: '2px 6px'  }
+  else if (zoomLevel <= 8)  return { pinW: 27, pinH: 36, badge: 8,  fontSize: 10, nameSize: 9,  namePad: '2px 5px'  }
+  else if (zoomLevel <= 10) return { pinW: 22, pinH: 30, badge: 7,  fontSize: 9,  nameSize: 8,  namePad: '1px 4px'  }
+  else                      return { pinW: 18, pinH: 24, badge: 6,  fontSize: 8,  nameSize: 7,  namePad: '1px 3px'  }
 }
 
-// ── 말풍선 마커 HTML 생성 ──
-// zoomLevel: 카카오 지도 레벨, index: 순번(1-based), customer: 고객 객체, bgColor: 배경색
+// ── 테어드롭(열기구) 핀 마커 HTML 생성 ──
+// SVG 기반 물방울 모양 핀 + 상단 원형 뱃지 + 고객명 라벨
 function buildMarkerHTML(customer, index, bgColor, zoomLevel) {
   const sz = getMarkerSizeByZoom(zoomLevel)
   const displayName = customer.customer_name.length > 10
     ? customer.customer_name.substring(0, 10)
     : customer.customer_name
 
-  const bw = sz.balloon           // 말풍선 가로
-  const bh = Math.round(bw * 0.72) // 말풍선 세로
-  const br = Math.round(bw * 0.22) // border-radius
-  const badgeDiam = Math.round(sz.badge * 1.8) // 원형 뱃지 지름
+  const pw = sz.pinW   // 핀 SVG 너비
+  const ph = sz.pinH   // 핀 SVG 높이
+  const bd = sz.badge  // 원형 뱃지 반지름
+
+  // SVG 물방울(테어드롭) 경로 계산
+  // 핀 상단 원 중심: (pw/2, r), 반지름 r = pw/2 * 0.9
+  // 하단 뾰족점: (pw/2, ph)
+  const cx  = pw / 2
+  const r   = pw / 2 * 0.90      // 원 반지름
+  const cy  = r                   // 원 중심 y
+  const tipY = ph                 // 뾰족 끝 y
+
+  // 원의 좌우 탄젠트 y (원 하단 근처)
+  const tY = cy + r * 0.75
+  // 베지어 제어점 x 폭 (좁을수록 더 뾰족)
+  const cpX = r * 0.28
+
+  // 왼쪽 탄젠트 → tip: 좌측 베지어, 오른쪽 탄젠트 → tip: 우측 베지어
+  const svgPath = [
+    `M ${cx - r},${cy}`,
+    `A ${r},${r} 0 1 1 ${cx + r},${cy}`,   // 상단 원호 (시계방향)
+    `C ${cx + r},${tY} ${cx + cpX},${tipY * 0.82} ${cx},${tipY}`,  // 오른쪽 → tip
+    `C ${cx - cpX},${tipY * 0.82} ${cx - r},${tY} ${cx - r},${cy}`, // tip → 왼쪽
+    'Z'
+  ].join(' ')
+
+  // 뱃지는 핀 상단 원 중심에 오버레이 (절대 위치)
+  const badgeDiam = bd * 2
+  // 라벨 최소 너비: 한글 10글자 기준 (한글 1자 ≈ nameSize * 1.1px), + 좌우 패딩
+  const charW = Math.round(sz.nameSize * 1.1)      // 한글 한 글자 너비 추정
+  const padH  = parseInt(sz.namePad.split(' ')[1])  // 좌우 패딩 px
+  const labelMinW = Math.max(pw + 10, charW * 10 + padH * 2)
 
   return `
     <div onclick="handleMarkerClick('${customer.id}')"
@@ -1849,68 +1878,58 @@ function buildMarkerHTML(customer, index, bgColor, zoomLevel) {
          data-customer-id="${customer.id}"
          style="position:relative; cursor:pointer; transform:translate(-50%,-100%);
                 display:flex; flex-direction:column; align-items:center; user-select:none;">
-      <!-- 고객명 라벨 (말풍선 위) -->
+      <!-- 고객명 라벨 (핀 위, 최대 10글자 보장) -->
       <div style="
         background: rgba(255,255,255,0.97);
         color: #1a1a1a;
         font-size: ${sz.nameSize}px;
         font-weight: 700;
-        padding: 2px 6px;
-        border-radius: 4px;
+        padding: ${sz.namePad};
+        border-radius: 5px;
         white-space: nowrap;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-        margin-bottom: 3px;
-        border: 1px solid rgba(0,0,0,0.12);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.28);
+        margin-bottom: 4px;
+        border: 1px solid rgba(0,0,0,0.1);
         line-height: 1.4;
-        max-width: ${bw + 20}px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        letter-spacing: -0.3px;
+        min-width: ${labelMinW}px;
+        text-align: center;
+        letter-spacing: -0.2px;
       ">${displayName}</div>
-      <!-- 말풍선 본체 -->
-      <div style="
-        width: ${bw}px;
-        height: ${bh}px;
-        background: ${bgColor};
-        border-radius: ${br}px;
-        border: 2.5px solid white;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.4);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        position: relative;
-      ">
-        <!-- 원형 번호 뱃지 -->
+      <!-- 핀 전체 래퍼 (SVG + 뱃지 오버레이) -->
+      <div style="position:relative; width:${pw}px; height:${ph}px; flex-shrink:0;">
+        <!-- SVG 물방울 핀 본체 -->
+        <svg width="${pw}" height="${ph}" viewBox="-1 -1 ${pw + 2} ${ph + 2}"
+             style="display:block; filter:drop-shadow(0 4px 6px rgba(0,0,0,0.38)); overflow:visible;">
+          <!-- 핀 본체 -->
+          <path d="${svgPath}" fill="${bgColor}" />
+          <!-- 흰색 테두리 효과 -->
+          <path d="${svgPath}" fill="none" stroke="white" stroke-width="2.5" stroke-linejoin="round" />
+        </svg>
+        <!-- 원형 번호 뱃지 (핀 원 중앙에 오버레이) -->
         <div style="
+          position: absolute;
+          top: ${Math.round(cy - bd)}px;
+          left: ${Math.round(cx - bd)}px;
           width: ${badgeDiam}px;
           height: ${badgeDiam}px;
-          background: rgba(255,255,255,0.28);
-          border: 2px solid rgba(255,255,255,0.85);
+          background: rgba(255,255,255,0.22);
+          border: ${Math.max(1.5, bd * 0.15)}px solid rgba(255,255,255,0.9);
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
-          box-shadow: inset 0 1px 3px rgba(0,0,0,0.15);
+          box-shadow: 0 1px 4px rgba(0,0,0,0.25);
         ">
           <span style="
             color: white;
             font-size: ${sz.fontSize}px;
             font-weight: 900;
             line-height: 1;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+            text-shadow: 0 1px 3px rgba(0,0,0,0.45);
             letter-spacing: -0.5px;
           ">${index}</span>
         </div>
       </div>
-      <!-- 말풍선 꼬리 (하단 중앙 삼각형) -->
-      <div style="
-        width: 0; height: 0;
-        border-left: ${sz.tail}px solid transparent;
-        border-right: ${sz.tail}px solid transparent;
-        border-top: ${sz.tail + 4}px solid ${bgColor};
-        margin-top: -1px;
-        filter: drop-shadow(0 3px 2px rgba(0,0,0,0.25));
-      "></div>
     </div>
   `
 }
