@@ -1958,49 +1958,46 @@ function initKakaoMap() {
         // 각 마커에 고유 ID 생성 (customer.id만 사용)
         const uniqueMarkerId = `marker-cid-${customer.id}`
         
-        // CustomOverlay로 핀포인트 말풍선 마커 생성
-        // onclick을 인라인으로 직접 추가 (CustomOverlay는 이 방식만 작동)
+        // CustomOverlay로 핀포인트 마커 생성 (작은 핀 + 위에 고객명 + 핀 안에 순번)
         const markerContent = `
-          <div onclick="handleMarkerClick('${customer.id}')" class="custom-marker" id="${uniqueMarkerId}" data-customer-id="${customer.id}" style="position: relative; cursor: pointer; transform: translate(-50%, -100%);">
-            <!-- 핀포인트 말풍선 컨테이너 -->
-            <div style="position: relative;">
-              <!-- 상단 원형 부분 -->
+          <div onclick="handleMarkerClick('${customer.id}')" class="custom-marker" id="${uniqueMarkerId}" data-customer-id="${customer.id}" style="position: relative; cursor: pointer; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center;">
+            <!-- 고객명 라벨 (핀 위) -->
+            <div style="
+              background: rgba(255,255,255,0.92);
+              color: #222;
+              font-size: 11px;
+              font-weight: 600;
+              padding: 2px 5px;
+              border-radius: 4px;
+              white-space: nowrap;
+              box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+              margin-bottom: 3px;
+              line-height: 1.3;
+              border: 1px solid rgba(0,0,0,0.12);
+            ">${shortName}</div>
+            <!-- 핀 본체 -->
+            <div style="display: flex; flex-direction: column; align-items: center;">
+              <!-- 원형 헤드 -->
               <div style="
-                width: 48px;
-                height: 48px;
+                width: 26px;
+                height: 26px;
                 background: ${bgColor};
-                border-radius: 50% 50% 50% 0;
-                transform: rotate(-45deg);
-                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-                border: 3px solid white;
+                border-radius: 50%;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+                border: 2px solid white;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                position: relative;
               ">
-                <!-- 아이콘 (회전 보정) -->
-                <i class="fas ${iconClass}" style="
-                  color: ${iconColor};
-                  font-size: 20px;
-                  transform: rotate(45deg);
-                  position: absolute;
-                  top: 50%;
-                  left: 50%;
-                  transform: translate(-50%, -50%) rotate(45deg);
-                "></i>
+                <span style="color: white; font-size: 11px; font-weight: 700; line-height: 1;">${index + 1}</span>
               </div>
-              <!-- 하단 꼬리 부분 -->
+              <!-- 핀 꼬리 -->
               <div style="
-                position: absolute;
-                bottom: -8px;
-                left: 50%;
-                transform: translateX(-50%);
-                width: 0;
-                height: 0;
-                border-left: 8px solid transparent;
-                border-right: 8px solid transparent;
-                border-top: 12px solid ${bgColor};
-                filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+                width: 0; height: 0;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 8px solid ${bgColor};
+                margin-top: -1px;
               "></div>
             </div>
           </div>
@@ -4275,43 +4272,50 @@ function updateMarkerColor(customerId, status) {
         iconClass = 'fa-map-marker-alt'
       }
       
+      // 고객명 짧게 표시 (최대 4글자)
+      const shortName = cust.customer_name.length > 4
+        ? cust.customer_name.substring(0, 4)
+        : cust.customer_name
+
       const markerContent = `
-        <div onclick="handleMarkerClick('${cust.id}')" class="custom-marker" id="marker-cid-${cust.id}" data-customer-id="${cust.id}" style="position: relative; cursor: pointer; transform: translate(-50%, -100%);">
-          <div style="position: relative;">
+        <div onclick="handleMarkerClick('${cust.id}')" class="custom-marker" id="marker-cid-${cust.id}" data-customer-id="${cust.id}" style="position: relative; cursor: pointer; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center;">
+          <!-- 고객명 라벨 (핀 위) -->
+          <div style="
+            background: rgba(255,255,255,0.92);
+            color: #222;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 5px;
+            border-radius: 4px;
+            white-space: nowrap;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+            margin-bottom: 3px;
+            line-height: 1.3;
+            border: 1px solid rgba(0,0,0,0.12);
+          ">${shortName}</div>
+          <!-- 핀 본체 -->
+          <div style="display: flex; flex-direction: column; align-items: center;">
+            <!-- 원형 헤드 -->
             <div style="
-              width: 48px;
-              height: 48px;
+              width: 26px;
+              height: 26px;
               background: ${bgColor};
-              border-radius: 50% 50% 50% 0;
-              transform: rotate(-45deg);
-              box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-              border: 3px solid white;
+              border-radius: 50%;
+              box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+              border: 2px solid white;
               display: flex;
               align-items: center;
               justify-content: center;
-              position: relative;
             ">
-              <i class="fas ${iconClass}" style="
-                color: ${iconColor};
-                font-size: 20px;
-                transform: rotate(45deg);
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%) rotate(45deg);
-              "></i>
+              <span style="color: white; font-size: 11px; font-weight: 700; line-height: 1;">${validCustomers.indexOf(cust) + 1}</span>
             </div>
+            <!-- 핀 꼬리 -->
             <div style="
-              position: absolute;
-              bottom: -8px;
-              left: 50%;
-              transform: translateX(-50%);
-              width: 0;
-              height: 0;
-              border-left: 8px solid transparent;
-              border-right: 8px solid transparent;
-              border-top: 12px solid ${bgColor};
-              filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+              width: 0; height: 0;
+              border-left: 5px solid transparent;
+              border-right: 5px solid transparent;
+              border-top: 8px solid ${bgColor};
+              margin-top: -1px;
             "></div>
           </div>
         </div>
