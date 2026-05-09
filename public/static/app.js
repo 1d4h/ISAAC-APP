@@ -1490,7 +1490,7 @@ function renderUserMap() {
         <div id="asResultModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4">
           <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div class="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
-              <h3 class="text-lg font-bold text-gray-800">A/S 결과 입력</h3>
+              <h3 class="text-lg font-bold text-gray-800">결과 입력</h3>
               <button onclick="closeASResultModal()" class="p-2 text-gray-500 hover:text-gray-700 active:bg-gray-100 rounded-full">
                 <i class="fas fa-times text-xl"></i>
               </button>
@@ -1537,7 +1537,7 @@ function renderUserMap() {
                 <textarea 
                   id="asResultText" 
                   rows="6" 
-                  placeholder="A/S 작업 내용을 입력하세요..."
+                  placeholder="작업 내용을 입력하세요..."
                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 ></textarea>
               </div>
@@ -3054,7 +3054,7 @@ function showCustomerDetail(customerId) {
         <div class="flex items-center justify-between gap-3 mb-2">
           <p class="text-sm text-gray-600">고객명</p>
           <button onclick="openASResultModal('${customer.id}')" class="px-3 py-1 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 active:bg-blue-700 transition">
-            <i class="fas fa-clipboard-check mr-1"></i>A/S 결과
+            <i class="fas fa-clipboard-check mr-1"></i>고객 확인
           </button>
         </div>
         <p class="text-lg font-semibold text-gray-800">${customer.customer_name}</p>
@@ -4250,13 +4250,8 @@ async function completeASResult() {
   const textArea = document.getElementById('asResultText')
   const resultText = textArea ? textArea.value.trim() : ''
   
-  if (!resultText && state.asPhotos.length === 0) {
-    showToast('작업 내용 또는 사진을 입력해주세요', 'error')
-    return
-  }
-  
   // 확인 대화상자
-  if (!confirm('A/S 작업을 완료하시겠습니까?\n완료하면 마커가 회색으로 변경됩니다.')) {
+  if (!confirm('작업을 완료하시겠습니까?\n완료하면 마커가 회색으로 변경됩니다.')) {
     return
   }
   
