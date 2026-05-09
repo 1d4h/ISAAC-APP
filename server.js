@@ -1019,8 +1019,8 @@ app.post('/api/customers/as-result', async (c) => {
           user_id: user.id,
           customer_id: customerId,
           type: 'as_complete',
-          title: 'A/S 작업 완료',
-          message: `${userName}님이 "${customerName}" 고객의 A/S 작업을 완료했습니다.`,
+          title: '확인 완료',
+          message: `${userName}님이 "${customerName}" 고객의 확인을 완료했습니다.`,
           is_read: false
         }))
         
@@ -1045,8 +1045,8 @@ app.post('/api/customers/as-result', async (c) => {
         
         if (!subsError && subscriptions && subscriptions.length > 0) {
           const pushPayload = JSON.stringify({
-            title: 'A/S 작업 완료',
-            body: `${userName}님이 "${customerName}" 고객의 A/S 작업을 완료했습니다.`,
+            title: '확인 완료',
+            body: `${userName}님이 "${customerName}" 고객의 확인을 완료했습니다.`,
             icon: '/static/icon-192.png',
             badge: '/static/badge-96.png',
             tag: 'as-notification',
@@ -1560,6 +1560,56 @@ app.post('/api/notifications/:id/read', async (c) => {
   }
 })
 
+// 알림 내역 조회 (읽음 + 안읽음 전체, 최근 50개)
+app.get('/api/notifications/history', async (c) => {
+  try {
+    const userId = c.req.query('user_id')
+    if (!userId) return c.json({ success: false, message: '사용자 ID가 필요합니다.' }, 400)
+
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    if (error) {
+      console.error('❌ 알림 내역 조회 오류:', error)
+      return c.json({ success: false, message: '알림 내역 조회 중 오류가 발생했습니다.' }, 500)
+    }
+
+    return c.json({ success: true, notifications: data })
+  } catch (error) {
+    console.error('❌ 알림 내역 조회 오류:', error)
+    return c.json({ success: false, message: '알림 내역 조회 중 오류가 발생했습니다.' }, 500)
+  }
+})
+
+// 알림 전체 읽음 처리
+app.post('/api/notifications/read-all', async (c) => {
+  try {
+    const userId = c.req.query('user_id')
+    if (!userId) return c.json({ success: false, message: '사용자 ID가 필요합니다.' }, 400)
+
+    const { error } = await supabase
+      .from('notifications')
+      .update({ is_read: true, read_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .eq('is_read', false)
+
+    if (error) {
+      console.error('❌ 알림 전체 읽음 처리 오류:', error)
+      return c.json({ success: false, message: '읽음 처리 중 오류가 발생했습니다.' }, 500)
+    }
+
+    console.log(`✅ 알림 전체 읽음 처리 완료 (user_id: ${userId})`)
+    return c.json({ success: true })
+  } catch (error) {
+    console.error('❌ 알림 전체 읽음 처리 오류:', error)
+    return c.json({ success: false, message: '읽음 처리 중 오류가 발생했습니다.' }, 500)
+  }
+})
+
 // 알림 생성 (A/S 완료 시)
 app.post('/api/notifications/create', async (c) => {
   try {
@@ -1589,8 +1639,8 @@ app.post('/api/notifications/create', async (c) => {
       user_id: user.id,
       customer_id: customer_id,
       type: 'as_complete',
-      title: 'A/S 작업 완료',
-      message: `${completed_by_name}님이 "${customer_name}" 고객의 A/S 작업을 완료했습니다.`,
+      title: '확인 완료',
+      message: `${completed_by_name}님이 "${customer_name}" 고객의 확인을 완료했습니다.`,
       is_read: false
     }))
     

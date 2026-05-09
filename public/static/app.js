@@ -17,7 +17,8 @@ const state = {
   currentASCustomerId: null,  // 현재 A/S 작업 중인 고객 ID
   gpsEnabled: false,  // GPS 활성화 상태 (기본값: 비활성화 - 사용자가 버튼을 눌러 활성화)
   notificationPollingInterval: null,  // 알림 폴링 인터벌
-  lastNotificationCheck: null  // 마지막 알림 확인 시간
+  lastNotificationCheck: null,  // 마지막 알림 확인 시간
+  shownNotificationIds: new Set()  // 이미 표시한 알림 ID (중복 방지)
 }
 
 // ============================================
@@ -1436,6 +1437,29 @@ function renderUserMap() {
             >
               <i id="notificationStatusIcon" class="fas fa-bell-slash text-gray-400"></i>
             </button>
+            <!-- 알림 내역확인 버튼 (관리자만) -->
+            <div class="relative">
+              <button 
+                onclick="toggleNotificationHistory()"
+                id="notificationHistoryBtn"
+                class="flex items-center gap-1.5 px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
+                title="알림 내역 확인"
+              >
+                <i class="fas fa-history text-gray-500"></i>
+                <span class="hidden sm:inline text-xs font-medium">알림 내역확인</span>
+                <span id="notificationBadge" class="hidden w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">0</span>
+              </button>
+              <!-- 알림 내역 드롭다운 -->
+              <div id="notificationHistoryPanel" class="hidden absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden">
+                <div class="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+                  <h3 class="text-sm font-bold text-gray-800"><i class="fas fa-bell mr-2 text-blue-500"></i>알림 내역</h3>
+                  <button onclick="markAllNotificationsRead()" class="text-xs text-blue-600 hover:text-blue-800 font-medium">모두 읽음</button>
+                </div>
+                <div id="notificationHistoryList" class="overflow-y-auto" style="max-height:360px;">
+                  <p class="text-sm text-gray-400 text-center py-8"><i class="fas fa-bell-slash mr-2"></i>알림 내역이 없습니다</p>
+                </div>
+              </div>
+            </div>
             ` : ''}
             
             ${state.currentUser.role === 'admin' ? `
@@ -1637,11 +1661,12 @@ function renderUserMap() {
           statusIcon = 'fa-circle'
         }
         
+        const isCompleted = customer.as_result === 'completed'
         return `
-        <div class="p-2 bg-gray-50 rounded-lg hover:bg-blue-50 cursor-pointer transition mb-1 border border-gray-200" onclick="showCustomerDetail('${customer.id}')">
+        <div class="p-2 ${isCompleted ? 'bg-gray-100' : 'bg-gray-50'} rounded-lg hover:bg-blue-50 cursor-pointer transition mb-1 border border-gray-200" onclick="showCustomerDetail('${customer.id}')">
           <div class="flex items-center justify-between gap-2">
             <span class="text-${statusColor}-500"><i class="fas ${statusIcon} text-xs"></i></span>
-            <p class="font-medium text-gray-800 text-sm flex-1">${customer.customer_name}</p>
+            <p class="font-medium text-sm flex-1 ${isCompleted ? 'text-gray-400 line-through' : 'text-gray-800'}">${customer.customer_name}</p>
           </div>
         </div>
         `
@@ -1811,11 +1836,12 @@ function renderCustomerList() {
     }
     
     // 간소화된 고객명만 표시
+    const isCompleted = customer.as_result === 'completed'
     return `
-    <div class="p-2 bg-gray-50 rounded-lg hover:bg-blue-50 cursor-pointer transition mb-1 border border-gray-200" onclick="showCustomerDetail('${customer.id}')">
+    <div class="p-2 ${isCompleted ? 'bg-gray-100' : 'bg-gray-50'} rounded-lg hover:bg-blue-50 cursor-pointer transition mb-1 border border-gray-200" onclick="showCustomerDetail('${customer.id}')">
       <div class="flex items-center justify-between gap-2">
         <span class="text-${statusColor}-500"><i class="fas ${statusIcon} text-xs"></i></span>
-        <p class="font-medium text-gray-800 text-sm flex-1">${customer.customer_name}</p>
+        <p class="font-medium text-sm flex-1 ${isCompleted ? 'text-gray-400 line-through' : 'text-gray-800'}">${customer.customer_name}</p>
         ${customer.distance ? `<span class="text-xs text-gray-500">${formatDistance(customer.distance)}</span>` : ''}
       </div>
     </div>
@@ -3362,11 +3388,12 @@ function filterCustomersByName() {
       statusIcon = 'fa-circle'
     }
     
+    const isCompleted = customer.as_result === 'completed'
     return `
-    <div class="p-2 bg-gray-50 rounded-lg hover:bg-blue-50 cursor-pointer transition mb-1 border border-gray-200" onclick="showCustomerDetail('${customer.id}')">
+    <div class="p-2 ${isCompleted ? 'bg-gray-100' : 'bg-gray-50'} rounded-lg hover:bg-blue-50 cursor-pointer transition mb-1 border border-gray-200" onclick="showCustomerDetail('${customer.id}')">
       <div class="flex items-center justify-between gap-2">
         <span class="text-${statusColor}-500"><i class="fas ${statusIcon} text-xs"></i></span>
-        <p class="font-medium text-gray-800 text-sm flex-1">${customer.customer_name}</p>
+        <p class="font-medium text-sm flex-1 ${isCompleted ? 'text-gray-400 line-through' : 'text-gray-800'}">${customer.customer_name}</p>
         ${customer.distance ? `<span class="text-xs text-gray-500">${formatDistance(customer.distance)}</span>` : ''}
       </div>
     </div>
@@ -3754,9 +3781,18 @@ async function checkNotifications() {
     if (response.data.success && response.data.notifications.length > 0) {
       const notifications = response.data.notifications
       console.log(`📢 새 알림 ${notifications.length}개 수신`)
+
+      // 읽지 않은 알림 수 뱃지 업데이트
+      updateNotificationBadge(notifications.length)
       
-      // 각 알림을 팝업으로 표시
-      notifications.forEach(notification => {
+      // 이미 표시하지 않은 알림만 처리 (중복 방지)
+      const newNotifications = notifications.filter(n => !state.shownNotificationIds.has(n.id))
+      console.log(`📢 신규 알림 ${newNotifications.length}개 표시`)
+      
+      newNotifications.forEach(notification => {
+        // 표시 완료 ID 기록
+        state.shownNotificationIds.add(notification.id)
+        
         // 1. 인앱 팝업 표시
         showNotificationPopup(notification)
         
@@ -3843,6 +3879,110 @@ async function closeNotification(notificationId, buttonElement) {
   }
 }
 
+
+// ============================================
+// 알림 내역 확인 기능
+// ============================================
+
+// 알림 내역 패널 토글
+function toggleNotificationHistory() {
+  const panel = document.getElementById('notificationHistoryPanel')
+  if (!panel) return
+  const isHidden = panel.classList.contains('hidden')
+  if (isHidden) {
+    panel.classList.remove('hidden')
+    loadNotificationHistory()
+    // 패널 외부 클릭 시 닫기
+    setTimeout(() => {
+      document.addEventListener('click', closeNotificationHistoryOnOutsideClick)
+    }, 50)
+  } else {
+    panel.classList.add('hidden')
+    document.removeEventListener('click', closeNotificationHistoryOnOutsideClick)
+  }
+}
+
+function closeNotificationHistoryOnOutsideClick(e) {
+  const panel = document.getElementById('notificationHistoryPanel')
+  const btn = document.getElementById('notificationHistoryBtn')
+  if (panel && btn && !panel.contains(e.target) && !btn.contains(e.target)) {
+    panel.classList.add('hidden')
+    document.removeEventListener('click', closeNotificationHistoryOnOutsideClick)
+  }
+}
+
+// 알림 내역 불러오기 (읽음 + 안읽음 모두)
+async function loadNotificationHistory() {
+  const listEl = document.getElementById('notificationHistoryList')
+  if (!listEl || !state.currentUser) return
+
+  listEl.innerHTML = '<p class="text-sm text-gray-400 text-center py-6"><i class="fas fa-spinner fa-spin mr-2"></i>불러오는 중...</p>'
+
+  try {
+    const response = await axios.get(`/api/notifications/history?user_id=${state.currentUser.id}`)
+    const notifications = response.data.notifications || []
+
+    if (notifications.length === 0) {
+      listEl.innerHTML = '<p class="text-sm text-gray-400 text-center py-8"><i class="fas fa-bell-slash mr-2"></i>알림 내역이 없습니다</p>'
+      return
+    }
+
+    // 뱃지 숨기기 (내역 확인 시)
+    updateNotificationBadge(0)
+
+    listEl.innerHTML = notifications.map(n => {
+      const isUnread = !n.is_read
+      const timeStr = new Date(n.created_at).toLocaleString('ko-KR', {
+        month: 'numeric', day: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      })
+      return `
+      <div class="flex items-start gap-3 px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition ${isUnread ? 'bg-blue-50' : ''}" data-nid="${n.id}">
+        <div class="flex-shrink-0 mt-0.5">
+          <div class="w-8 h-8 rounded-full ${isUnread ? 'bg-blue-100' : 'bg-gray-100'} flex items-center justify-center">
+            <i class="fas fa-check-circle text-sm ${isUnread ? 'text-blue-500' : 'text-gray-400'}"></i>
+          </div>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-semibold ${isUnread ? 'text-gray-900' : 'text-gray-600'}">${n.title}</p>
+          <p class="text-xs text-gray-500 mt-0.5 leading-relaxed">${n.message}</p>
+          <p class="text-xs text-gray-400 mt-1">${timeStr}</p>
+        </div>
+        ${isUnread ? `<div class="flex-shrink-0 w-2 h-2 bg-blue-500 rounded-full mt-2"></div>` : ''}
+      </div>
+      `
+    }).join('')
+  } catch (error) {
+    console.error('❌ 알림 내역 조회 오류:', error)
+    listEl.innerHTML = '<p class="text-sm text-red-400 text-center py-6">불러오기 실패</p>'
+  }
+}
+
+// 알림 뱃지 업데이트
+function updateNotificationBadge(count) {
+  const badge = document.getElementById('notificationBadge')
+  if (!badge) return
+  if (count > 0) {
+    badge.textContent = count > 9 ? '9+' : count
+    badge.classList.remove('hidden')
+  } else {
+    badge.classList.add('hidden')
+  }
+}
+
+// 모두 읽음 처리
+async function markAllNotificationsRead() {
+  if (!state.currentUser) return
+  try {
+    await axios.post(`/api/notifications/read-all?user_id=${state.currentUser.id}`)
+    updateNotificationBadge(0)
+    loadNotificationHistory()
+    showToast('모든 알림을 읽음 처리했습니다', 'success')
+  } catch (error) {
+    console.error('❌ 모두 읽음 처리 오류:', error)
+    showToast('읽음 처리 중 오류가 발생했습니다', 'error')
+  }
+}
 
 // 내 위치로 이동
 function moveToUserLocation() {
@@ -4479,6 +4619,8 @@ window.openKakaoTalk = openKakaoTalk
 window.shareCustomerViaKakao = shareCustomerViaKakao
 window.closeNotification = closeNotification
 window.requestNotificationPermission = requestNotificationPermission
+window.toggleNotificationHistory = toggleNotificationHistory
+window.markAllNotificationsRead = markAllNotificationsRead
 
 // ============================================
 // 앱 초기화
