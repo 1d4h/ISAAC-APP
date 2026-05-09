@@ -363,26 +363,37 @@ function parseExcel(file) {
         
         // Excel 헤더 → DB 필드 매핑 (유연한 매핑)
         const headerMap = {
-          // 필수 필드 (여러 변형 지원)
+          // ── 고객명 ──
           '고객명': 'customer_name',
           '신청시소유주': 'customer_name',
           '실사용자': 'customer_name',
+          '성명': 'customer_name',
+          '대표소유자': 'customer_name',
+          '대표소유자최대지분': 'customer_name',
+          // ── 연락처 ──
           '전화번호': 'phone',
           '연락처': 'phone',
           '소유주연락처': 'phone',
+          '주연락처': 'phone',
+          // ── 주소 ──
           '주소': 'address',
           '설치장소': 'address',
-          // '설치위치'는 address로 매핑하지 않음 (옥외형, 옥상 등의 값)
-          
-          // 선택 필드
+          '설치주소': 'address',
+          '도로명주소': 'address',
+          // ── 행정동/지역 ──
+          '행정동': 'region',
+          '지역': 'region',
+          // ── 선택 필드 ──
           '순번': 'sequence',
+          '번호': 'sequence',
           '횟수': 'count',
-          '접수': 'receipt_date',           // A/S 접수대장용
-          '접수일자': 'receipt_date',       // A/S 접수대장용
-          '현장확인일자': 'receipt_date',    // 현장 통합 관리용
+          '접수': 'receipt_date',
+          '접수일자': 'receipt_date',
+          '현장확인일자': 'receipt_date',
           '업체': 'company',
           '구분': 'category',
           '사업구분': 'category',
+          '시설구분': 'category',
           '설치연월': 'install_date',
           '설치연,월': 'install_date',
           '설치년도': 'install_date',
@@ -391,35 +402,53 @@ function parseExcel(file) {
           'A/S접수내용': 'as_content',
           'AS접수내용': 'as_content',
           '설치팀': 'install_team',
-          '지역': 'region',
           '접수자': 'receptionist',
           'AS결과': 'as_result',
           'A/S결과': 'as_result',
           '점검결과': 'as_result',
-          '설치위치': 'install_location'  // 별도 필드로 처리
+          '설치위치': 'install_location'
         }
         
-        // 헤더 정규화 함수: 줄바꿈, 공백, 특수문자 제거
+        // 헤더 정규화 함수: 줄바꿈·공백·괄호 내용 제거
         const normalizeHeader = (header) => {
           if (!header) return ''
           return String(header)
-            .replace(/[\r\n\t]/g, '')  // 줄바꿈, 탭 제거
-            .replace(/\s+/g, '')        // 공백 제거
+            .replace(/[\r\n\t]/g, '')   // 줄바꿈·탭 제거
+            .replace(/\(.*?\)/g, '')    // 괄호 및 괄호 안 내용 제거
+            .replace(/\s+/g, '')        // 공백 전체 제거
             .trim()
         }
         
+        // ── 헤더 행 자동 탐색 ──
+        // 제목행·빈행을 건너뛰고 실제 헤더(키워드 포함 행)를 찾음
+        const HEADER_KEYWORDS = [
+          '고객명','대표소유자','실사용자','성명',
+          '주소','도로명주소','설치장소',
+          '연락처','전화번호','주연락처','행정동'
+        ]
+        let headerRowIndex = 0
+        for (let ri = 0; ri < Math.min(jsonData.length, 8); ri++) {
+          const norm = jsonData[ri].map(h => normalizeHeader(h))
+          if (HEADER_KEYWORDS.some(kw => norm.includes(kw))) {
+            headerRowIndex = ri
+            break
+          }
+        }
+        console.log('📋 헤더 행 인덱스:', headerRowIndex)
+        
         // 헤더와 데이터 분리
-        const rawHeaders = jsonData[0]
+        const rawHeaders = jsonData[headerRowIndex]
         const normalizedHeaders = rawHeaders.map(h => normalizeHeader(h))
+        const dataRows = jsonData.slice(headerRowIndex + 1)
         
         console.log('📋 원본 헤더:', rawHeaders)
         console.log('📋 정규화된 헤더:', normalizedHeaders)
         
-        // 필수 필드 확인 (고객명, 연락처, 주소)
+        // 필수 필드 확인 (고객명 또는 주소 중 하나만 있어도 허용)
         const mappedHeaders = normalizedHeaders.map(h => {
           const mapped = headerMap[h]
           if (!mapped && rawHeaders[normalizedHeaders.indexOf(h)]) {
-            return headerMap[rawHeaders[normalizedHeaders.indexOf(h)]]
+            return headerMap[normalizeHeader(String(rawHeaders[normalizedHeaders.indexOf(h)]))]
           }
           return mapped
         }).filter(Boolean)
@@ -431,24 +460,26 @@ function parseExcel(file) {
         console.log('✅ 매핑된 필드:', mappedHeaders)
         console.log('📋 필수 필드 확인:', { hasCustomerName, hasPhone, hasAddress })
         
-        if (!hasCustomerName || !hasPhone || !hasAddress) {
-          const missing = []
-          if (!hasCustomerName) missing.push('고객명')
-          if (!hasPhone) missing.push('연락처')
-          if (!hasAddress) missing.push('주소')
-          
-          reject(new Error(`필수 필드가 누락되었습니다: ${missing.join(', ')}\n\n업로드하려는 Excel 파일에는 반드시 "고객명", "연락처(또는 전화번호)", "주소" 컬럼이 포함되어야 합니다.`))
+        if (!hasCustomerName && !hasAddress) {
+          reject(new Error(
+            '필수 필드가 누락되었습니다.\n\n' +
+            '지원하는 헤더 형식:\n' +
+            '• 고객명 / 대표 소유자 / 실사용자\n' +
+            '• 도로명 주소 / 주소 / 설치장소\n' +
+            '• 주 연락처 / 연락처 / 전화번호\n' +
+            '• 행정동 (선택)'
+          ))
           return
         }
         
         const rows = []
         
-        for (let i = 1; i < jsonData.length; i++) {
+        for (let i = 0; i < dataRows.length; i++) {
           const row = {}
           let hasData = false
           
           normalizedHeaders.forEach((header, index) => {
-            const value = jsonData[i][index]
+            const value = dataRows[i][index]
             
             // 헤더 매핑 (정규화된 헤더로 찾기)
             let mappedKey = headerMap[header]
@@ -1032,7 +1063,12 @@ function renderAdminDashboard() {
             <i class="fas fa-hard-hat text-green-600 text-lg"></i>
             <div>
               <p class="text-sm font-semibold text-green-800">현장 통합 관리</p>
-              <p class="text-xs text-green-600">실사용자, 설치장소 정보를 업로드합니다</p>
+              <p class="text-xs text-green-600 mt-0.5">아래 형식의 Excel 파일을 모두 지원합니다</p>
+              <div class="text-xs text-green-700 mt-1.5 space-y-0.5">
+                <p>• <b>기본 형식</b>: 고객명, 주소, 연락처</p>
+                <p>• <b>현장관리 형식</b>: 실사용자, 설치장소, 소유주연락처</p>
+                <p>• <b>재생에너지 형식</b>: 행정동, 대표 소유자, 도로명 주소, 주 연락처</p>
+              </div>
             </div>
           </div>
           <!-- 파일 선택 -->
@@ -1056,6 +1092,21 @@ function renderAdminDashboard() {
             <button onclick="submitUserUpload()" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium">
               <i class="fas fa-upload mr-2"></i>업로드 시작
             </button>
+          </div>
+          <!-- 템플릿 다운로드 -->
+          <div class="border-t pt-3">
+            <p class="text-xs text-gray-500 mb-2"><i class="fas fa-download mr-1"></i>템플릿 다운로드</p>
+            <div class="flex gap-2 flex-wrap">
+              <button onclick="downloadSampleExcel('energy')" class="px-3 py-1.5 text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition">
+                <i class="fas fa-solar-panel mr-1"></i>재생에너지 형식
+              </button>
+              <button onclick="downloadSampleExcel('site')" class="px-3 py-1.5 text-xs bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 transition">
+                <i class="fas fa-hard-hat mr-1"></i>현장관리 형식
+              </button>
+              <button onclick="downloadSampleExcel('as')" class="px-3 py-1.5 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition">
+                <i class="fas fa-tools mr-1"></i>A/S 형식
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1219,25 +1270,53 @@ async function processUserExcelUpload(file, username, uploadSource) {
     const data = await file.arrayBuffer()
     const workbook = XLSX.read(data, { type: 'array', cellDates: true })
     const sheet = workbook.Sheets[workbook.SheetNames[0]]
-    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' })
-    if (rows.length === 0) { showToast('데이터가 없습니다', 'error'); return }
+    const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
+    if (rawData.length === 0) { showToast('데이터가 없습니다', 'error'); return }
 
-    // 컬럼 매핑
-    const mapped = rows.map(row => {
+    // ── 헤더 정규화 함수 (괄호·줄바꿈·공백 제거) ──
+    const normalizeH = (h) => {
+      if (!h) return ''
+      return String(h).replace(/[\r\n\t]/g, '').replace(/\(.*?\)/g, '').replace(/\s+/g, '').trim()
+    }
+
+    // ── 헤더 행 자동 탐색 ──
+    const HDR_KEYS = ['고객명','대표소유자','실사용자','성명',
+                      '주소','도로명주소','설치장소',
+                      '연락처','전화번호','주연락처','행정동']
+    let hdrIdx = 0
+    for (let ri = 0; ri < Math.min(rawData.length, 8); ri++) {
+      const norm = rawData[ri].map(h => normalizeH(h))
+      if (HDR_KEYS.some(kw => norm.includes(kw))) { hdrIdx = ri; break }
+    }
+    const headers = rawData[hdrIdx].map(h => normalizeH(h))
+    const dataRows = rawData.slice(hdrIdx + 1)
+    console.log('📋 계정업로드 헤더 행 인덱스:', hdrIdx, '| 헤더:', headers)
+
+    // ── 컬럼 매핑 ──
+    const colMap = {
+      '고객명': 'customer_name', '실사용자': 'customer_name', '성명': 'customer_name',
+      '대표소유자': 'customer_name', '대표소유자최대지분': 'customer_name',
+      '전화번호': 'phone', '연락처': 'phone', '소유주연락처': 'phone', '주연락처': 'phone',
+      '주소': 'address', '설치장소': 'address', '설치주소': 'address', '도로명주소': 'address',
+      '행정동': 'region', '지역': 'region',
+      '상세주소': 'address_detail',
+      '접수일': 'receipt_date', '설치일': 'install_date', '설치년도': 'install_date',
+      '업체명': 'company', '업체': 'company',
+      '분류': 'category', '구분': 'category', '사업구분': 'category', '시설구분': 'category',
+      '열원': 'heat_source', '에너지원': 'heat_source',
+      'A/S내용': 'as_content', 'AS내용': 'as_content',
+      '설치팀': 'install_team', '접수자': 'receptionist', '처리결과': 'as_result',
+      '순번': 'sequence', '번호': 'sequence'
+    }
+
+    const mapped = dataRows.map(rowArr => {
       const r = {}
-      const colMap = {
-        '고객명': 'customer_name', '실사용자': 'customer_name', '성명': 'customer_name',
-        '전화번호': 'phone', '연락처': 'phone', '소유주연락처': 'phone',
-        '주소': 'address', '설치장소': 'address', '설치주소': 'address',
-        '상세주소': 'address_detail',
-        '접수일': 'receipt_date', '설치일': 'install_date',
-        '업체명': 'company', '분류': 'category', '열원': 'heat_source',
-        'A/S내용': 'as_content', '설치팀': 'install_team',
-        '지역': 'region', '접수자': 'receptionist', '처리결과': 'as_result'
-      }
-      Object.entries(row).forEach(([k, v]) => {
-        const mapped_key = colMap[k.trim()] || k.trim().toLowerCase().replace(/\s+/g,'_')
-        r[mapped_key] = v
+      headers.forEach((h, idx) => {
+        const key = colMap[h] || h.toLowerCase().replace(/[^a-z0-9]/g, '_')
+        const val = rowArr[idx]
+        if (val !== undefined && val !== null && String(val).trim() !== '') {
+          r[key] = String(val).trim()
+        }
       })
       return r
     })
@@ -2709,6 +2788,28 @@ function downloadSampleExcel(tabType = 'as') {
     XLSX.utils.book_append_sheet(wb, ws, '현장통합관리')
     XLSX.writeFile(wb, '현장통합관리_템플릿.xlsx')
     showToast('현장 통합 관리 템플릿이 다운로드되었습니다', 'success')
+
+  } else if (tabType === 'energy') {
+    // 재생에너지 융복합 형식 템플릿 (양림동 형식)
+    const sampleData = [
+      ['행정동', '대표 소유자', '도로명 주소', '주 연락처', '시설구분', '에너지원'],
+      ['양림동', '홍길동', '광주광역시 남구 천변좌로 442-10', '010-1234-5678', '주택', '태양광'],
+      ['방림동', '김영희', '광주광역시 남구 양림로89번길 3-6', '010-2345-6789', '주택', '태양광'],
+      ['봉선동', '이철수', '광주광역시 남구 제중로 39-7', '010-3456-7890', '건물', '태양광']
+    ]
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(sampleData)
+    ws['!cols'] = [
+      { wch: 12 },  // 행정동
+      { wch: 20 },  // 대표 소유자
+      { wch: 45 },  // 도로명 주소
+      { wch: 16 },  // 주 연락처
+      { wch: 10 },  // 시설구분
+      { wch: 10 }   // 에너지원
+    ]
+    XLSX.utils.book_append_sheet(wb, ws, '재생에너지융복합')
+    XLSX.writeFile(wb, '재생에너지융복합_템플릿.xlsx')
+    showToast('재생에너지 융복합 템플릿이 다운로드되었습니다', 'success')
   }
 }
 
