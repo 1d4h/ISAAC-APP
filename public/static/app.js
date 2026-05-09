@@ -1656,6 +1656,9 @@ function renderUserMap() {
         } else if (markerColor === 'r') {
           statusColor = 'red'
           statusIcon = 'fa-exclamation-circle'
+        } else if (markerColor === 'gray') {
+          statusColor = 'gray'
+          statusIcon = 'fa-check-circle'
         } else {
           statusColor = 'blue'
           statusIcon = 'fa-circle'
@@ -1830,6 +1833,9 @@ function renderCustomerList() {
     } else if (markerColor === 'r') {
       statusColor = 'red'
       statusIcon = 'fa-exclamation-circle'
+    } else if (markerColor === 'gray') {
+      statusColor = 'gray'
+      statusIcon = 'fa-check-circle'
     } else {
       statusColor = 'blue'
       statusIcon = 'fa-circle'
@@ -3383,6 +3389,9 @@ function filterCustomersByName() {
     } else if (markerColor === 'r') {
       statusColor = 'red'
       statusIcon = 'fa-exclamation-circle'
+    } else if (markerColor === 'gray') {
+      statusColor = 'gray'
+      statusIcon = 'fa-check-circle'
     } else {
       statusColor = 'blue'
       statusIcon = 'fa-circle'
