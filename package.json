@@ -5,9 +5,20 @@
     "start": "node server.js",
     "dev": "node server.js",
     "clean-port": "fuser -k 3000/tcp 2>/dev/null || true",
-    "test": "curl http://localhost:3000"
+    "test": "curl http://localhost:3000",
+    "cap:sync": "npx cap sync",
+    "cap:sync:android": "npx cap sync android",
+    "cap:sync:ios": "npx cap sync ios",
+    "cap:open:android": "npx cap open android",
+    "cap:open:ios": "npx cap open ios",
+    "cap:build:android": "npx cap sync android && cd android && ./gradlew assembleDebug",
+    "cap:run:android": "npx cap run android"
   },
   "dependencies": {
+    "@capacitor/android": "^8.1.0",
+    "@capacitor/cli": "^7.5.0",
+    "@capacitor/core": "^8.1.0",
+    "@capacitor/ios": "^8.1.0",
     "@hono/node-server": "^1.13.7",
     "@supabase/supabase-js": "^2.94.0",
     "bcryptjs": "^3.0.3",

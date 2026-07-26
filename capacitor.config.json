@@ -1,0 +1,18 @@
+{
+  "appId": "com.dreambox.customermanager",
+  "appName": "고객 관리 시스템",
+  "webDir": "public",
+  "bundledWebRuntime": false,
+  "server": {
+    "url": "https://3000-i76on73jhx68e3lvjdosj-02b9cc79.sandbox.novita.ai",
+    "cleartext": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "backgroundColor": "#3B82F6",
+      "showSpinner": true,
+      "spinnerColor": "#FFFFFF"
+    }
+  }
+}

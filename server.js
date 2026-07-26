@@ -57,13 +57,18 @@ app.post('/api/auth/login', async (c) => {
       .limit(1)
     
     if (error) {
+      console.error('❌ Supabase 오류:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      })
       const isNetworkError = error.message && (
         error.message.includes('fetch failed') ||
         error.message.includes('ENOTFOUND') ||
         error.message.includes('521') ||
         error.message.includes('Web server is down')
       )
-      console.error('❌ Supabase 오류:', error)
       if (isNetworkError) {
         return c.json({ success: false, message: 'DB 서버 연결 오류입니다. Supabase 프로젝트가 일시정지 상태일 수 있습니다.' }, 503)
       }
@@ -98,6 +103,15 @@ app.post('/api/auth/login', async (c) => {
     })
   } catch (error) {
     console.error('❌ 로그인 오류:', error)
+    
+    // TypeError: fetch failed 에러 처리
+    if (error.message && error.message.includes('fetch failed')) {
+      return c.json({ 
+        success: false, 
+        message: '데이터베이스 연결 오류입니다. 네트워크를 확인하고 다시 시도해주세요.' 
+      }, 503)
+    }
+    
     return c.json({ success: false, message: '로그인 처리 중 오류가 발생했습니다.' }, 500)
   }
 })
