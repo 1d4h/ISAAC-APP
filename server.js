@@ -50,6 +50,19 @@ app.get('/index.html', (c) => {
   }
 })
 
+// Google AdSense ads.txt 서빙
+app.get('/ads.txt', (c) => {
+  try {
+    const content = readFileSync('./public/ads.txt', 'utf-8')
+    c.header('Content-Type', 'text/plain')
+    return c.body(content)
+  } catch (e) {
+    return c.text('google.com, pub-7511857276293910, DIRECT, f08c47fec0942fa0\n', 200, {
+      'Content-Type': 'text/plain'
+    })
+  }
+})
+
 // ============================================
 // 인증 API
 // ============================================
@@ -1716,6 +1729,10 @@ app.get('/', (c) => {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>고객관리 시스템</title>
+        <!-- Google AdSense 소유권 확인 -->
+        <meta name="google-adsense-account" content="ca-pub-7511857276293910">
+        <!-- Google AdSense -->
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7511857276293910" crossorigin="anonymous"></script>
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <style>
