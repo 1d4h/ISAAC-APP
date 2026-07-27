@@ -40,6 +40,16 @@ app.use('/api/*', cors())
 // 정적 파일 제공
 app.use('/static/*', serveStatic({ root: './public' }))
 
+// index.html 직접 서빙 (서버 없이도 접근 가능한 독립 HTML)
+app.get('/index.html', (c) => {
+  try {
+    const html = readFileSync('./public/index.html', 'utf-8')
+    return c.html(html)
+  } catch (e) {
+    return c.text('index.html을 찾을 수 없습니다.', 404)
+  }
+})
+
 // ============================================
 // 인증 API
 // ============================================
