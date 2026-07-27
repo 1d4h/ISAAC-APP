@@ -19,9 +19,9 @@ const vapidEmail = process.env.VAPID_EMAIL || 'mailto:admin@example.com'
 webpush.setVapidDetails(vapidEmail, vapidPublicKey, vapidPrivateKey)
 console.log('✅ Web Push VAPID 설정 완료')
 
-// Supabase 클라이언트 생성
-const supabaseUrl = process.env.SUPABASE_URL
-const supabaseKey = process.env.SUPABASE_ANON_KEY
+// Supabase 클라이언트 생성 (환경변수 우선, 없으면 기본값 사용)
+const supabaseUrl = process.env.SUPABASE_URL || 'https://peelrrycglnqdcxtllfr.supabase.co'
+const supabaseKey = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlZWxycnljZ2xucWRjeHRsbGZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1MjM5NzAsImV4cCI6MjA4NjA5OTk3MH0.t_Hap-t_4DurLLCPzSD-o88uhtL5HbpNsxvrhTTCNyw'
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('❌ SUPABASE_URL 또는 SUPABASE_ANON_KEY가 설정되지 않았습니다.')
