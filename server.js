@@ -1777,11 +1777,12 @@ app.get('/', (c) => {
   `)
 })
 
-const port = 3000
+const port = parseInt(process.env.PORT || '3000', 10)
 console.log(`🚀 서버가 http://localhost:${port} 에서 실행 중입니다`)
 console.log(`🗄️ Supabase 연동 완료`)
 
 serve({
   fetch: app.fetch,
-  port
+  port,
+  hostname: '0.0.0.0'   // Render 등 외부 접근 허용
 })
